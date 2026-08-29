@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+				<title>3475 Tundra Arm League</title>
+				<meta name="description" content="3475 Tundra Arm League - Alliance troops power leaderboard, legion roster, and match scheduling.">
+				<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
+				<link rel="stylesheet" href="style.css">
+
+					<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer=""></script>
+					<script src="troops.js?v=11" defer=""></script>
+				</head>
+	<body>
+		<!-- SHARED SVG SYMBOL: CLASHING SWORDS ICON (used via <use> to avoid repeating markup) -->
+		<svg style="position:absolute; width:0; height:0; overflow:hidden;" aria-hidden="true">
+			<symbol id="clash-sword-icon" viewBox="0 0 100 100">
+				<g class="sword-left-group">
+					<path d="M 38 62 L 78 22 L 82 26 L 42 66 Z" fill="#f1f5f9" stroke="#0f172a" stroke-width="3" stroke-linejoin="round"/>
+					<path d="M 38 62 L 78 22 L 76 30 Z" fill="#cbd5e1"/>
+					<path d="M 28 54 C 34 50, 44 60, 46 68 C 38 68, 28 60, 28 54 Z" fill="#0f172a"/>
+					<path d="M 33 65 L 21 77" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+					<circle cx="19" cy="79" r="4" fill="#0f172a"/>
+				</g>
+				<g class="sword-right-group">
+					<path d="M 62 62 L 22 22 L 18 26 L 58 66 Z" fill="#f1f5f9" stroke="#0f172a" stroke-width="3" stroke-linejoin="round"/>
+					<path d="M 62 62 L 22 22 L 24 30 Z" fill="#cbd5e1"/>
+					<path d="M 72 54 C 66 50, 56 60, 54 68 C 62 68, 72 60, 72 54 Z" fill="#0f172a"/>
+					<path d="M 67 65 L 79 77" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+					<circle cx="81" cy="79" r="4" fill="#0f172a"/>
+				</g>
+				<g class="spark-group">
+					<line x1="50" y1="36" x2="50" y2="24" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+					<line x1="38" y1="44" x2="28" y2="38" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+					<line x1="62" y1="44" x2="72" y2="38" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+				</g>
+			</symbol>
+		</svg>
+
+		<header class="navbar">
+			<span class="logo fire-text">3475</span>
+			<div class="navbar-controls">
+				<div class="translate-container">
+					<div id="google_translate_element"></div>
+				</div>
+				<button id="snow-toggle-btn" class="btn-snow-toggle" onclick="toggleSnowEffect()" title="Toggle snow effect">❄️ ON</button>
+				<button id="admin-toggle-btn" class="btn-admin" onclick="handleAdminLogin()">Alliance Staff</button>
+			</div>
+		</header>
+
+		<div id="live-clock-container">
+			<div class="clock-item">
+				<span id="local-clock-label" class="clock-label">LOCAL:</span>
+				<span id="local-clock" class="clock-time">00:00:00</span>
+			</div>
+			<div class="clock-divider">|</div>
+			<div class="clock-item">
+				<span class="clock-label">UTC-0:</span>
+				<span id="utc-clock" class="clock-time" style="color: #f59e0b;">00:00:00</span>
+			</div>
+		</div>
+
+		<main class="container">
+			<!-- MAIN MENU: ALLIANCE & LEGION SELECTION -->
+			<section id="alliance-menu-page">
+				<h1 class="page-title fire-text">Tundra Arm League</h1>
+				<p class="page-subtitle">Select Alliance, Global Leaderboard, or Legion Roster</p>
+
+				<div class="list-container" style="margin-top: 20px;">
+					<!-- LEGION 1 BUTTON -->
+					<div class="list-item legion-btn legion-btn-1" onclick="selectLegion('Legion 1')" role="button" tabindex="0" aria-label="Legion 1 roster">
+						<div class="legion-btn-header">
+							<span class="legion-btn-label">
+								<svg class="clash-svg" viewBox="0 0 100 100" style="color:#3b82f6;">
+									<use href="#clash-sword-icon"></use>
+								</svg>
+								LEGION 1 (30 Battle / 20 Sub)
+							</span>
+							<div class="legion-btn-actions">
+								<button class="admin-schedule-btn hidden" id="edit-schedule-legion-1" onclick="event.stopPropagation(); openScheduleModal('Legion 1')">Set Schedule</button>
+								<span class="arrow legion-btn-arrow">&gt;</span>
+							</div>
+						</div>
+						<div id="display-schedule-legion-1" class="schedule-display schedule-display-l1">
+							⏰ Match Time: <span class="schedule-time-val">-</span>
+						</div>
+					</div>
+
+					<!-- LEGION 2 BUTTON -->
+					<div class="list-item legion-btn legion-btn-2" onclick="selectLegion('Legion 2')" role="button" tabindex="0" aria-label="Legion 2 roster">
+						<div class="legion-btn-header">
+							<span class="legion-btn-label">
+								<svg class="clash-svg" viewBox="0 0 100 100" style="color:#ef4444;">
+									<use href="#clash-sword-icon"></use>
+								</svg>
+								LEGION 2 (30 Battle / 20 Sub)
+							</span>
+							<div class="legion-btn-actions">
+								<button class="admin-schedule-btn hidden" id="edit-schedule-legion-2" onclick="event.stopPropagation(); openScheduleModal('Legion 2')">Set Schedule</button>
+								<span class="arrow legion-btn-arrow">&gt;</span>
+							</div>
+						</div>
+						<div id="display-schedule-legion-2" class="schedule-display schedule-display-l2">
+							⏰ Match Time: <span class="schedule-time-val">-</span>
+						</div>
+					</div>
+
+					<div class="list-spacer"></div>
+
+					<!-- ALLIANCE & GLOBAL BUTTONS -->
+					<div class="list-item" onclick="selectAlliance('ARX')" role="button" tabindex="0" aria-label="ARX Alliance">
+						<span>🛡️ ARX Alliance</span>
+						<span class="arrow">&gt;</span>
+					</div>
+					<div class="list-item" onclick="selectAlliance('IDN')" role="button" tabindex="0" aria-label="IDN Alliance">
+						<span>🛡️ IDN Alliance</span>
+						<span class="arrow">&gt;</span>
+					</div>
+					<div class="list-item" onclick="selectAlliance('VNX')" role="button" tabindex="0" aria-label="VNX Alliance">
+						<span>🛡️ VNX Alliance</span>
+						<span class="arrow">&gt;</span>
+					</div>
+					<div class="list-item" onclick="selectAlliance('ZXC')" role="button" tabindex="0" aria-label="ZXC Alliance">
+						<span>🛡️ ZXC Alliance</span>
+						<span class="arrow">&gt;</span>
+					</div>
+					<div class="list-item" onclick="selectAlliance('CAT')" role="button" tabindex="0" aria-label="CAT Alliance">
+						<span>🛡️ CAT Alliance</span>
+						<span class="arrow">&gt;</span>
+					</div>
+
+					<!-- ALL TROOPS POWER BUTTON -->
+					<div class="list-item all-troops-btn" onclick="selectAlliance('ALL')" role="button" tabindex="0" aria-label="All troops power global rank">
+						<span class="all-troops-label">
+							<span class="all-troops-icon">🏆</span>
+							ALL TROOPS POWER (GLOBAL RANK)
+						</span>
+						<span class="arrow legion-btn-arrow">&gt;</span>
+					</div>
+
+					<div class="list-spacer"></div>
+
+					<!-- EVENT REPORTS BUTTON -->
+					<div class="list-item" onclick="window.location.href='events.html'" role="button" tabindex="0" aria-label="Event report screenshots">
+						<span>📋 Event Reports</span>
+						<span class="arrow">&gt;</span>
+					</div>
+				</div>
+			</section>
+
+
+			<!-- TROOPS & LEGION TABLE PAGE -->
+			<section id="troops-table-page" class="hidden">
+				<div class="schedule-actions">
+					<button class="btn-back" onclick="showAllianceMenu()" style="margin-bottom: 0;">&lt; Back to Menu</button>
+					<div class="schedule-actions-buttons">
+						<button id="add-entry-btn" class="btn-apply" style="margin-bottom: 0; padding: 10px 16px; font-size: 0.9rem;" onclick="openAddModal()">+ Add Player Power</button>
+						<button id="add-legion-member-btn" class="btn-apply" style="margin-bottom: 0; padding: 10px 16px; font-size: 0.9rem; background: #7c3aed; display: none;" onclick="openAddLegionModal()">+ Assign Player to Legion</button>
+						<button class="btn-apply" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); margin-bottom: 0; padding: 10px 16px; font-size: 0.9rem;" onclick="exportToCSV()">Export CSV</button>
+					</div>
+				</div>
+
+				<h1 class="page-title" id="selected-alliance-title">ARX Alliance</h1>
+				<h3 class="section-title" style="text-align: center; color: #8a8d98; font-size: 0.9rem;">
+					<span id="sub-page-title">Troops Power Leaderboard</span>
+					<span id="admin-indicator" style="color:#ef4444; font-size:0.8rem; display:none;">(ALLIANCE STAFF MODE)</span>
+				</h3>
+
+				<!-- LEGION STATUS COUNTER BAR -->
+				<div id="legion-counter-bar" style="display: none; justify-content: center; align-items: center; gap: 15px; margin: 12px 0; font-size: 0.9rem;">
+					<span style="background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; padding: 6px 12px; border-radius: 8px; color: #4ade80; display: inline-flex; align-items: center;">
+						<svg class="clash-svg" viewBox="0 0 100 100" style="width: 20px; height: 20px; margin-right: 4px; color:#22c55e;">
+							<use href="#clash-sword-icon"></use>
+						</svg>
+						<strong>Battle Main Players:</strong> <span id="count-battle" style="margin-left: 4px;">0</span> / 30
+					</span>
+					<span style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; padding: 6px 12px; border-radius: 8px; color: #fbbf24;">
+						🛡️ <strong>Substitute Players:</strong> <span id="count-substitute">0</span> / 20
+					</span>
+				</div>
+
+				<!-- DINAMIS POWER SUMMARY CARDS CONTAINER -->
+				<div id="dynamic-summary-cards" style="display: grid; gap: 10px; margin: 15px auto 10px auto;">
+					<!-- Dinamis diisi via troops.js -->
+				</div>
+
+				<!-- SEARCH + LAST UPDATED TOOLBAR -->
+				<div class="table-toolbar">
+					<div class="search-bar-container">
+						<input type="text" id="search-input" class="search-input" placeholder="🔍 Search nickname or Game ID..." oninput="handleSearchInput(this.value)">
+					</div>
+					<span id="last-updated-text" class="last-updated-text">Last updated: -</span>
+				</div>
+
+				<div class="table-container">
+					<table>
+						<thead>
+							<tr id="table-header-row">
+								<th>RANK</th>
+								<th class="sortable" onclick="handleSortClick('alliance')">ALLIANCE <span class="sort-arrow" id="sort-arrow-alliance"></span></th>
+								<th class="sortable" onclick="handleSortClick('nickname')">NICKNAME <span class="sort-arrow" id="sort-arrow-nickname"></span></th>
+								<th class="sortable" onclick="handleSortClick('game_id')">GAME ID <span class="sort-arrow" id="sort-arrow-game_id"></span></th>
+								<th class="sortable" onclick="handleSortClick('troops_power')">TROOPS POWER <span class="sort-arrow" id="sort-arrow-troops_power"></span></th>
+								<th class="sortable" onclick="handleSortClick('preferred_time')">PREFERRED TIME <span class="sort-arrow" id="sort-arrow-preferred_time"></span></th>
+								<th id="th-status" style="display: none;">STATUS</th>
+								<th id="th-action" style="display: none;">ACTION</th>
+							</tr>
+						</thead>
+						<tbody id="troops-table-body">
+							<!-- Populated via JS -->
+						</tbody>
+					</table>
+				</div>
+
+				<!-- PAGINATION -->
+				<div id="pagination-controls" class="pagination-controls" style="display:none;">
+					<button class="btn-back" onclick="goToPrevPage()" id="pagination-prev-btn">&lt; Prev</button>
+					<span id="pagination-info">Page 1 of 1</span>
+					<button class="btn-back" onclick="goToNextPage()" id="pagination-next-btn">Next &gt;</button>
+				</div>
+			</section>
+		</main>
+
+		<!-- SCHEDULE SETTING MODAL FOR ADMIN -->
+		<div id="schedule-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeScheduleModal()">&times;</span>
+				<h2 class="modal-title">Set Match Schedule</h2>
+				<p class="modal-subtitle">
+					Target: <span id="schedule-modal-target" class="modal-target-highlight">-</span>
+				</p>
+
+				<div class="form-group">
+					<label>Match Time (UTC)</label>
+					<select id="input-match-time">
+						<option value="">-- Select Match Time --</option>
+						<option value="02:00 UTC">02:00 UTC</option>
+						<option value="07:00 UTC">07:00 UTC</option>
+						<option value="12:00 UTC">12:00 UTC</option>
+						<option value="14:00 UTC">14:00 UTC</option>
+						<option value="19:00 UTC">19:00 UTC</option>
+					</select>
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closeScheduleModal()">Cancel</button>
+					<button class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitMatchSchedule()">Save Schedule</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- PRESIDENT / GUILD INFO EDIT MODAL (Full-access staff only) -->
+		<div id="president-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closePresidentModal()">&times;</span>
+				<h2 class="modal-title">Edit President Info</h2>
+				<p class="modal-subtitle">This updates the footer shown to everyone.</p>
+
+				<div class="form-group">
+					<label>President Name</label>
+					<input type="text" id="input-president-name" placeholder="Enter president name">
+				</div>
+
+				<div class="form-group">
+					<label>Guild Name</label>
+					<input type="text" id="input-guild-name" placeholder="Enter guild name">
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closePresidentModal()">Cancel</button>
+					<button id="president-submit-btn" class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitPresidentInfo()">Save</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- PLAYER INPUT/EDIT MODAL -->
+		<div id="add-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeAddModal()">&times;</span>
+				<h2 id="modal-form-title" class="modal-title">Add Troops Power</h2>
+				<p class="modal-subtitle">
+					Alliance: <span id="form-alliance-label" class="modal-target-highlight">-</span>
+				</p>
+
+				<div class="form-group" id="group-alliance-select" style="display: none;">
+					<label>Select Alliance</label>
+					<select id="input-alliance">
+						<option value="ARX">ARX</option>
+						<option value="IDN">IDN</option>
+						<option value="VNX">VNX</option>
+						<option value="ZXC">ZXC</option>
+						<option value="CAT">CAT</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>In-Game Nickname</label>
+					<input type="text" id="input-nickname" placeholder="Enter nickname">
+				</div>
+
+				<div class="form-group">
+					<label>In-Game ID</label>
+					<input type="number" id="input-gameid" placeholder="Enter Game ID">
+				</div>
+
+				<div class="form-group">
+					<label>Troops Power Amount</label>
+					<input type="number" id="input-power" placeholder="e.g. 150000000">
+				</div>
+
+				<!-- PREFERRED TIME DROPDOWN -->
+				<div class="form-group">
+					<label>Preferred Time (UTC)</label>
+					<select id="input-preferred-time">
+						<option value="">-- Select Preferred Time --</option>
+						<option value="02:00 UTC">02:00 UTC</option>
+						<option value="07:00 UTC">07:00 UTC</option>
+						<option value="12:00 UTC">12:00 UTC</option>
+						<option value="14:00 UTC">14:00 UTC</option>
+						<option value="19:00 UTC">19:00 UTC</option>
+					</select>
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closeAddModal()">Cancel</button>
+					<button id="modal-submit-btn" class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitPlayerData()">Submit Data</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- PRESIDENT LEGION ASSIGNMENT MODAL -->
+		<div id="legion-assign-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeLegionAssignModal()">&times;</span>
+				<h2 class="modal-title">Assign Player to Legion</h2>
+				<p class="modal-subtitle">
+					Target: <span id="legion-assign-target-label" class="modal-target-highlight-purple">Legion 1</span>
+				</p>
+
+				<div class="form-group">
+					<label>Select Player</label>
+					<select id="select-legion-player">
+						<!-- Populated via JS -->
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>Legion Role Status</label>
+					<select id="select-legion-role">
+						<option value="Battle">⚔️ Battle (Main Players - Max 30)</option>
+						<option value="Substitute">🛡️ Substitute (Reserve Players - Max 20)</option>
+					</select>
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closeLegionAssignModal()">Cancel</button>
+					<button class="btn-apply" style="background: #7c3aed;" onclick="submitLegionAssignment()">Assign Player</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ALLIANCE STAFF LOGIN MODAL (Supabase Auth, username-based) -->
+		<div id="login-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeLoginModal()">&times;</span>
+				<h2 class="modal-title">Alliance Staff Login</h2>
+				<p class="modal-subtitle">Sign in with your staff account to manage rosters.</p>
+
+				<div class="form-group">
+					<label>Username</label>
+					<input type="text" id="input-login-username" placeholder="Enter username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">
+				</div>
+
+				<div class="form-group">
+					<label>Password</label>
+					<input type="password" id="input-login-password" placeholder="Enter password" autocomplete="current-password">
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closeLoginModal()">Cancel</button>
+					<button id="login-submit-btn" class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitStaffLogin()">Sign In</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- CONFIRMATION MODAL -->
+		<div id="confirm-modal" class="modal hidden">
+			<div class="modal-content custom-confirm-box">
+				<h3 id="confirm-message" style="margin-bottom: 20px; font-size: 1.1rem; line-height: 1.5; color: #f1f5f9;">Are you sure?</h3>
+				<div class="form-actions" style="margin-top: 0;">
+					<button id="confirm-cancel-btn" class="btn-back">Cancel</button>
+					<button id="confirm-ok-btn" class="btn-apply" style="background: #ef4444;">OK</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- TOAST CONTAINER -->
+		<div id="toast-container" class="toast-container"></div>
+
+		<footer class="site-footer">
+			<div class="footer-section">
+				<p style="color: #8a8d98; margin-bottom: 6px;">Current President</p>
+				<div class="footer-row">
+					<div id="display-president-name" class="fire-text">...</div>
+				</div>
+				<div class="footer-row" style="margin-top: 4px;">
+					<p id="display-guild-name" class="guild-name fire-text">...</p>
+				</div>
+				<button id="edit-president-btn" class="btn-apply hidden" style="margin-top: 10px; padding: 6px 14px; font-size: 0.75rem;" onclick="openPresidentModal()">Edit President Info</button>
+			</div>
+
+			<div class="footer-note">
+				Created By : ACE aka DEMON
+			</div>
+		</footer>
+
+		<!-- Google Translate Script -->
+		<script type="text/javascript">
+			function googleTranslateElementInit() {
+			new google.translate.TranslateElement({
+			pageLanguage: 'en',
+			includedLanguages: 'en,id,vi,ru,ko,zh-CN,zh-TW,th,tl',
+			layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+			}, 'google_translate_element');
+			}
+		</script>
+	</body>
+</html>

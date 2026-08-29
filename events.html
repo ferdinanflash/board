@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>3475 Tundra Arm League - Event Reports</title>
+		<meta name="description" content="3475 Tundra Arm League - Event report screenshot archive, organized by event and date range.">
+		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
+		<link rel="stylesheet" href="style.css">
+
+		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+		<script src="events.js?v=1" defer></script>
+	</head>
+	<body>
+		<header class="navbar">
+			<span class="logo fire-text">3475</span>
+			<div class="navbar-controls">
+				<a href="index.html" class="btn-back" style="margin-bottom:0; text-decoration:none; display:inline-flex; align-items:center;">&lt; Main Menu</a>
+				<button id="admin-toggle-btn" class="btn-admin" onclick="handleAdminLogin()">Alliance Staff</button>
+			</div>
+		</header>
+
+		<main class="container">
+			<!-- PAGE 1: EVENT TYPE LIST -->
+			<section id="event-menu-page">
+				<h1 class="page-title fire-text">Event Reports</h1>
+				<p class="page-subtitle">Select an event to view its report screenshots</p>
+
+				<div class="list-container" id="event-type-list">
+					<!-- Populated via JS -->
+				</div>
+			</section>
+
+			<!-- PAGE 2: EVENT DURATION LIST (each entry = one run of that event) -->
+			<section id="event-duration-page" class="hidden">
+				<button class="btn-back" onclick="showEventMenu()">&lt; Back to Events</button>
+
+				<div class="schedule-actions">
+					<h1 class="page-title" id="event-duration-title" style="margin-bottom:0;">Event Name</h1>
+					<button id="add-duration-btn" class="btn-apply hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="openDurationModal()">+ Add Duration</button>
+				</div>
+				<p class="page-subtitle">Select a date range to view its uploaded screenshots</p>
+
+				<div class="list-container" id="event-duration-list"></div>
+				<p id="event-duration-empty" class="page-subtitle hidden" style="margin-top: 20px;">No durations added for this event yet.</p>
+			</section>
+
+			<!-- PAGE 3: SCREENSHOT GALLERY FOR ONE DURATION -->
+			<section id="event-gallery-page" class="hidden">
+				<button class="btn-back" onclick="showDurationList()">&lt; Back to Durations</button>
+
+				<div class="schedule-actions">
+					<h1 class="page-title" id="event-gallery-title" style="margin-bottom:0; font-size: 1.4rem;">Event · Date Range</h1>
+					<div class="schedule-actions-buttons">
+						<button id="upload-screenshot-btn" class="btn-apply hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="triggerFileSelect()">+ Upload Screenshot</button>
+						<button id="delete-duration-btn" class="btn-apply btn-danger hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="deleteCurrentDuration()">Delete This Duration</button>
+					</div>
+				</div>
+
+				<input type="file" id="screenshot-file-input" accept="image/*" multiple style="display:none;" onchange="handleFileSelect(event)">
+				<div id="upload-progress-text" class="last-updated-text hidden" style="display:block; text-align:center; margin: 10px 0;"></div>
+
+				<div class="screenshot-grid" id="screenshot-grid"></div>
+				<p id="screenshot-empty" class="page-subtitle hidden" style="margin-top: 20px;">No screenshots uploaded for this date range yet.</p>
+			</section>
+		</main>
+
+		<!-- ADD EVENT DURATION MODAL -->
+		<div id="duration-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeDurationModal()">&times;</span>
+				<h2 class="modal-title">Add Event Duration</h2>
+				<p class="modal-subtitle">
+					Event: <span id="duration-modal-event-label" class="modal-target-highlight">-</span>
+				</p>
+
+				<div class="form-group">
+					<label>Start Date</label>
+					<input type="date" id="input-duration-start">
+				</div>
+
+				<div class="form-group">
+					<label>End Date</label>
+					<input type="date" id="input-duration-end">
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closeDurationModal()">Cancel</button>
+					<button class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitDuration()">Save</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- SCREENSHOT LIGHTBOX -->
+		<div id="lightbox-modal" class="modal hidden" onclick="closeLightbox(event)">
+			<div class="lightbox-content" onclick="event.stopPropagation()">
+				<span class="close-modal" onclick="closeLightbox(event)">&times;</span>
+				<img id="lightbox-image" src="" alt="Event report screenshot">
+				<div class="lightbox-meta">
+					<span id="lightbox-uploaded-at">-</span>
+					<button id="lightbox-delete-btn" class="btn-apply btn-danger hidden" onclick="deleteCurrentScreenshot()">Delete Screenshot</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ALLIANCE STAFF LOGIN MODAL (same Supabase Auth used on the main site) -->
+		<div id="login-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeLoginModal()">&times;</span>
+				<h2 class="modal-title">Alliance Staff Login</h2>
+				<p class="modal-subtitle">Sign in with your staff account to add durations and upload screenshots.</p>
+
+				<div class="form-group">
+					<label>Username</label>
+					<input type="text" id="input-login-username" placeholder="Enter username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">
+				</div>
+
+				<div class="form-group">
+					<label>Password</label>
+					<input type="password" id="input-login-password" placeholder="Enter password" autocomplete="current-password">
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closeLoginModal()">Cancel</button>
+					<button id="login-submit-btn" class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitStaffLogin()">Sign In</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- CONFIRMATION MODAL -->
+		<div id="confirm-modal" class="modal hidden">
+			<div class="modal-content custom-confirm-box">
+				<h3 id="confirm-message" style="margin-bottom: 20px; font-size: 1.1rem; line-height: 1.5; color: #f1f5f9;">Are you sure?</h3>
+				<div class="form-actions" style="margin-top: 0;">
+					<button id="confirm-cancel-btn" class="btn-back">Cancel</button>
+					<button id="confirm-ok-btn" class="btn-apply" style="background: #ef4444;">OK</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- TOAST CONTAINER -->
+		<div id="toast-container" class="toast-container"></div>
+
+		<footer class="site-footer">
+			<div class="footer-note">
+				Created By : ACE aka DEMON
+			</div>
+		</footer>
+	</body>
+</html>
