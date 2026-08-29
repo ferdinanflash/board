@@ -116,8 +116,54 @@ function updateAdminUI() {
     document.getElementById('upload-screenshot-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('delete-duration-btn')?.classList.toggle('hidden', !isAdmin);
 
+    const storageBar = document.getElementById('admin-storage-bar');
+    if (storageBar) {
+        storageBar.classList.toggle('hidden', !isAdmin);
+        if (isAdmin) loadStorageUsage();
+    }
+
     const lightboxDeleteBtn = document.getElementById('lightbox-delete-btn');
     if (lightboxDeleteBtn) lightboxDeleteBtn.classList.toggle('hidden', !isAdmin || !currentLightboxShotId);
+}
+
+// ================= STORAGE QUOTA INDICATOR (STAFF ONLY) =================
+// Supabase's free plan caps FILE STORAGE (all buckets combined) at 1 GB. This
+// tracks only what THIS feature (event screenshots) is using, via the
+// file_size_bytes column + the event_screenshots_storage_bytes() SQL function
+// (see event-reports-supabase-setup.sql). Other buckets in the same project
+// (e.g. bukti-topup) count against the same 1 GB but aren't included here.
+const STORAGE_FREE_PLAN_LIMIT_BYTES = 1024 * 1024 * 1024; // 1 GB
+
+async function loadStorageUsage() {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data, error } = await client.rpc('event_screenshots_storage_bytes');
+    if (error) {
+        console.warn('Failed to load storage usage', error);
+        return;
+    }
+
+    renderStorageUsage(Number(data) || 0);
+}
+
+function renderStorageUsage(usedBytes) {
+    const fill = document.getElementById('storage-usage-fill');
+    const text = document.getElementById('storage-usage-text');
+    if (!fill || !text) return;
+
+    const percent = Math.min(100, (usedBytes / STORAGE_FREE_PLAN_LIMIT_BYTES) * 100);
+    fill.style.width = `${percent.toFixed(1)}%`;
+    fill.classList.toggle('storage-usage-warn', percent >= 70 && percent < 90);
+    fill.classList.toggle('storage-usage-danger', percent >= 90);
+
+    text.innerText = `Event screenshots: ${formatBytes(usedBytes)} / 1 GB used (${percent.toFixed(1)}%) — free plan cap is shared with other buckets in this project`;
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function refreshCurrentView() {
@@ -443,6 +489,7 @@ async function deleteCurrentDuration() {
             showToast('Duration deleted', 'success');
             currentEventType = targetEventType;
             showDurationList();
+            if (isAdmin) loadStorageUsage();
         }
     );
 }
@@ -504,7 +551,48 @@ function triggerFileSelect() {
     document.getElementById('screenshot-file-input').click();
 }
 
-const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024; // 8MB per file
+const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024; // 8MB per file, checked AFTER compression
+
+// ================= AUTO-COMPRESSION BEFORE UPLOAD =================
+// Shrinks screenshots client-side (resize + re-encode as JPEG) before they
+// ever leave the browser, so both Supabase storage AND egress quota (free
+// plan: 1 GB storage, 5 GB egress/month) get used up much slower.
+const COMPRESS_MAX_DIMENSION = 1920; // longest side, in px
+const COMPRESS_JPEG_QUALITY = 0.8;
+const COMPRESS_SKIP_BELOW_BYTES = 300 * 1024; // not worth compressing tiny files
+
+async function compressImage(file) {
+    // Animated GIFs would lose their animation if redrawn to a canvas — leave them alone.
+    if (file.type === 'image/gif' || file.size < COMPRESS_SKIP_BELOW_BYTES) {
+        return file;
+    }
+
+    try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, COMPRESS_MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+        const targetW = Math.round(bitmap.width * scale);
+        const targetH = Math.round(bitmap.height * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+        bitmap.close?.();
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', COMPRESS_JPEG_QUALITY));
+
+        // If compression didn't actually help (rare, e.g. already-tiny/compressed
+        // images), just keep the original rather than making it bigger.
+        if (!blob || blob.size >= file.size) return file;
+
+        const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+        return new File([blob], newName, { type: 'image/jpeg' });
+    } catch (err) {
+        console.warn('Image compression failed, uploading original file instead', err);
+        return file;
+    }
+}
 
 async function handleFileSelect(e) {
     const files = Array.from(e.target.files || []);
@@ -519,6 +607,8 @@ async function handleFileSelect(e) {
     progressEl.classList.remove('hidden');
 
     let successCount = 0;
+    let totalOriginalBytes = 0;
+    let totalFinalBytes = 0;
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -528,17 +618,20 @@ async function handleFileSelect(e) {
             showToast(`${file.name} is not an image, skipped`, 'warning');
             continue;
         }
-        if (file.size > MAX_SCREENSHOT_BYTES) {
-            showToast(`${file.name} is larger than 8MB, skipped`, 'warning');
+
+        const uploadFile = await compressImage(file);
+
+        if (uploadFile.size > MAX_SCREENSHOT_BYTES) {
+            showToast(`${file.name} is larger than 8MB even after compression, skipped`, 'warning');
             continue;
         }
 
-        const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        const safeName = uploadFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
         const path = `${currentEventType.key}/${currentDuration.id}/${Date.now()}-${i}-${safeName}`;
 
         const { error: uploadError } = await client.storage
             .from(SCREENSHOT_BUCKET)
-            .upload(path, file, { cacheControl: '3600', upsert: false });
+            .upload(path, uploadFile, { cacheControl: '3600', upsert: false });
 
         if (uploadError) {
             showToast(`Failed to upload ${file.name}`, 'error');
@@ -551,7 +644,8 @@ async function handleFileSelect(e) {
             event_instance_id: currentDuration.id,
             image_url: urlData.publicUrl,
             storage_path: path,
-            uploaded_by: currentStaffUsername
+            uploaded_by: currentStaffUsername,
+            file_size_bytes: uploadFile.size
         });
 
         if (insertError) {
@@ -561,13 +655,20 @@ async function handleFileSelect(e) {
         }
 
         successCount++;
+        totalOriginalBytes += file.size;
+        totalFinalBytes += uploadFile.size;
     }
 
     progressEl.classList.add('hidden');
 
     if (successCount) {
-        showToast(`${successCount} screenshot(s) uploaded!`, 'success');
+        const savedPercent = totalOriginalBytes > 0
+            ? Math.round((1 - totalFinalBytes / totalOriginalBytes) * 100)
+            : 0;
+        const savedNote = savedPercent > 5 ? ` (compressed, saved ~${savedPercent}% space)` : '';
+        showToast(`${successCount} screenshot(s) uploaded!${savedNote}`, 'success');
         loadScreenshots(currentDuration.id);
+        if (isAdmin) loadStorageUsage();
     }
 }
 
@@ -609,5 +710,6 @@ async function deleteCurrentScreenshot() {
         showToast('Screenshot deleted', 'success');
         closeLightbox();
         loadScreenshots(currentDuration.id);
+        if (isAdmin) loadStorageUsage();
     });
 }

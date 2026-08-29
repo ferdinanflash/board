@@ -3,13 +3,13 @@
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>3475 All Event Reports</title>
-		<meta name="description" content="3475 All Event report screenshot archive, organized by event and date range.">
+		<title>3475 Tundra Arm League - Event Reports</title>
+		<meta name="description" content="3475 Tundra Arm League - Event report screenshot archive, organized by event and date range.">
 		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
 		<link rel="stylesheet" href="style.css">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-		<script src="events.js?v=2" defer></script>
+		<script src="events.js?v=1" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -19,6 +19,14 @@
 				<button id="admin-toggle-btn" class="btn-admin" onclick="handleAdminLogin()">Alliance Staff</button>
 			</div>
 		</header>
+
+		<!-- STORAGE QUOTA INDICATOR (STAFF ONLY) -->
+		<div id="admin-storage-bar" class="storage-usage-bar hidden">
+			<div class="storage-usage-track">
+				<div id="storage-usage-fill" class="storage-usage-fill"></div>
+			</div>
+			<span id="storage-usage-text" class="storage-usage-label">Loading storage usage...</span>
+		</div>
 
 		<main class="container">
 			<!-- PAGE 1: EVENT TYPE LIST -->
