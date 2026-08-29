@@ -157,7 +157,7 @@ function renderStorageUsage(usedBytes) {
     fill.classList.toggle('storage-usage-warn', percent >= 70 && percent < 90);
     fill.classList.toggle('storage-usage-danger', percent >= 90);
 
-    text.innerText = `Event screenshots: ${formatBytes(usedBytes)} / 1 GB used (${percent.toFixed(1)}%) — free plan cap is shared with other buckets in this project`;
+    text.innerText = `Event screenshots: ${formatBytes(usedBytes)} / 1 GB used (${percent.toFixed(1)}%) — Delete old archieve if u dont need it anymore`;
 }
 
 function formatBytes(bytes) {
