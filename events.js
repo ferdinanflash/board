@@ -49,6 +49,8 @@ const EVENT_TYPES = [
     { key: 'defeat_nearby_beast', label: 'Defeat Nearby Beast', icon: '🐉' },
     { key: 'namecard_event', label: 'Namecard Event', icon: '🪪' },
     { key: 'big_event', label: 'Big Event', icon: '🌟' },
+    { key: 'king_of_icefield', label: 'King of Icefield', icon: '👑' },
+    { key: 'state_of_power_svs', label: 'State of Power (SvS)', icon: '🔥' },
 ];
 
 // ================= STATE =================
