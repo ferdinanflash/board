@@ -60,16 +60,17 @@
 				<div class="schedule-actions">
 					<h1 class="page-title" id="event-gallery-title" style="margin-bottom:0; font-size: 1.4rem;">Event · Date Range</h1>
 					<div class="schedule-actions-buttons">
-						<button id="upload-screenshot-btn" class="btn-apply hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="triggerFileSelect()">+ Upload Screenshot</button>
+						<button id="upload-screenshot-btn" class="btn-apply hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="triggerFileSelect()">+ Upload File</button>
 						<button id="delete-duration-btn" class="btn-apply btn-danger hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="deleteCurrentDuration()">Delete This Duration</button>
 					</div>
 				</div>
 
-				<input type="file" id="screenshot-file-input" accept="image/*" multiple style="display:none;" onchange="handleFileSelect(event)">
+				<input type="file" id="screenshot-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z" multiple style="display:none;" onchange="handleFileSelect(event)">
 				<div id="upload-progress-text" class="last-updated-text hidden" style="display:block; text-align:center; margin: 10px 0;"></div>
+				<p class="page-subtitle" style="margin-top: 6px; font-size: 0.75rem;">Images, PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP/RAR/7Z (max 8MB per file, images are auto-compressed)</p>
 
 				<div class="screenshot-grid" id="screenshot-grid"></div>
-				<p id="screenshot-empty" class="page-subtitle hidden" style="margin-top: 20px;">No screenshots uploaded for this date range yet.</p>
+				<p id="screenshot-empty" class="page-subtitle hidden" style="margin-top: 20px;">No files uploaded for this date range yet.</p>
 			</section>
 		</main>
 
@@ -104,6 +105,11 @@
 			<div class="lightbox-content" onclick="event.stopPropagation()">
 				<span class="close-modal" onclick="closeLightbox(event)">&times;</span>
 				<img id="lightbox-image" src="" alt="Event report screenshot">
+				<div id="lightbox-file-preview" class="lightbox-file-preview hidden">
+					<div id="lightbox-file-icon" class="lightbox-file-icon">📄</div>
+					<div id="lightbox-file-name" class="lightbox-file-name">file.pdf</div>
+					<a id="lightbox-file-open-link" class="btn-apply" href="#" target="_blank" rel="noopener noreferrer" style="margin-bottom:0; text-decoration:none; display:inline-block;">Open / Download</a>
+				</div>
 				<div class="lightbox-meta">
 					<span id="lightbox-uploaded-at">-</span>
 					<button id="lightbox-delete-btn" class="btn-apply btn-danger hidden" onclick="deleteCurrentScreenshot()">Delete Screenshot</button>

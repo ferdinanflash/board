@@ -533,12 +533,20 @@ function renderScreenshotGrid() {
     }
     emptyEl.classList.add('hidden');
 
-    grid.innerHTML = currentScreenshots.map(s => `
-        <div class="screenshot-card" onclick="openLightbox(${s.id})" role="button" tabindex="0" aria-label="View screenshot uploaded ${escapeHtml(formatDateTime(s.uploaded_at))}">
-            <img src="${escapeHtml(s.image_url)}" loading="lazy" alt="Event report screenshot">
+    grid.innerHTML = currentScreenshots.map(s => {
+        const label = isImageFile(s) ? 'screenshot' : 'file';
+        const thumb = isImageFile(s)
+            ? `<img src="${escapeHtml(s.image_url)}" loading="lazy" alt="Event report screenshot">`
+            : `<div class="screenshot-card-file">
+                   <div class="screenshot-card-file-icon">${getFileIcon(s)}</div>
+                   <div class="screenshot-card-file-name">${escapeHtml(getDisplayFileName(s))}</div>
+               </div>`;
+        return `
+        <div class="screenshot-card" onclick="openLightbox(${s.id})" role="button" tabindex="0" aria-label="View ${label} uploaded ${escapeHtml(formatDateTime(s.uploaded_at))}">
+            ${thumb}
             <div class="screenshot-card-meta">${escapeHtml(formatDateTime(s.uploaded_at))}</div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function formatDateTime(iso) {
@@ -546,12 +554,54 @@ function formatDateTime(iso) {
     return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// ================= FILE TYPE HELPERS (images vs other documents) =================
+// The DB row doesn't have a dedicated "file type" column, so we infer it from
+// the file's extension in the stored URL/path. Good enough for choosing how
+// to render a card (thumbnail vs icon) and the lightbox (image vs download).
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+
+const FILE_ICONS = {
+    pdf: '📄',
+    doc: '📝', docx: '📝',
+    xls: '📊', xlsx: '📊', csv: '📊',
+    ppt: '📽️', pptx: '📽️',
+    txt: '🧾',
+    zip: '🗜️', rar: '🗜️', '7z': '🗜️',
+};
+
+function getFileExtension(pathOrUrl) {
+    const clean = (pathOrUrl || '').split('?')[0];
+    const match = clean.match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1].toLowerCase() : '';
+}
+
+function isImageFile(shot) {
+    return IMAGE_EXTENSIONS.includes(getFileExtension(shot.storage_path || shot.image_url));
+}
+
+function getFileIcon(shot) {
+    return FILE_ICONS[getFileExtension(shot.storage_path || shot.image_url)] || '📁';
+}
+
+// Storage paths look like: eventKey/durationId/TIMESTAMP-INDEX-safeName.ext
+// Strip the folder prefix and the "TIMESTAMP-INDEX-" prefix to recover a
+// human-friendly file name for display.
+function getDisplayFileName(shot) {
+    const path = shot.storage_path || shot.image_url || '';
+    const base = path.split('/').pop() || 'file';
+    return base.replace(/^\d+-\d+-/, '') || base;
+}
+
 function triggerFileSelect() {
     if (!isAdmin || !currentDuration) return;
     document.getElementById('screenshot-file-input').click();
 }
 
-const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024; // 8MB per file, checked AFTER compression
+const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024; // 8MB per file (images: checked AFTER compression; other files: checked as-is)
+
+// Non-image files we accept, besides any image/* MIME type. Keep this in
+// sync with the accept="" attribute on #screenshot-file-input in index.html.
+const ALLOWED_DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', '7z'];
 
 // ================= AUTO-COMPRESSION BEFORE UPLOAD =================
 // Shrinks screenshots client-side (resize + re-encode as JPEG) before they
@@ -614,15 +664,21 @@ async function handleFileSelect(e) {
         const file = files[i];
         progressEl.innerText = `Uploading ${i + 1} of ${files.length}...`;
 
-        if (!file.type.startsWith('image/')) {
-            showToast(`${file.name} is not an image, skipped`, 'warning');
+        const isImage = file.type.startsWith('image/');
+        const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+        if (!isImage && !ALLOWED_DOCUMENT_EXTENSIONS.includes(ext)) {
+            showToast(`${file.name} is not a supported file type, skipped`, 'warning');
             continue;
         }
 
-        const uploadFile = await compressImage(file);
+        // Only images go through client-side compression; other documents
+        // are uploaded as-is.
+        const uploadFile = isImage ? await compressImage(file) : file;
 
         if (uploadFile.size > MAX_SCREENSHOT_BYTES) {
-            showToast(`${file.name} is larger than 8MB even after compression, skipped`, 'warning');
+            const reason = isImage ? 'even after compression' : '';
+            showToast(`${file.name} is larger than 8MB ${reason}, skipped`.replace(/\s+/g, ' ').trim(), 'warning');
             continue;
         }
 
@@ -677,7 +733,23 @@ function openLightbox(id) {
     if (!shot) return;
 
     currentLightboxShotId = id;
-    document.getElementById('lightbox-image').src = shot.image_url;
+
+    const imageEl = document.getElementById('lightbox-image');
+    const filePreviewEl = document.getElementById('lightbox-file-preview');
+
+    if (isImageFile(shot)) {
+        imageEl.classList.remove('hidden');
+        imageEl.src = shot.image_url;
+        filePreviewEl.classList.add('hidden');
+    } else {
+        imageEl.classList.add('hidden');
+        imageEl.src = '';
+        document.getElementById('lightbox-file-icon').innerText = getFileIcon(shot);
+        document.getElementById('lightbox-file-name').innerText = getDisplayFileName(shot);
+        document.getElementById('lightbox-file-open-link').href = shot.image_url;
+        filePreviewEl.classList.remove('hidden');
+    }
+
     document.getElementById('lightbox-uploaded-at').innerText = `Uploaded: ${formatDateTime(shot.uploaded_at)}`;
     document.getElementById('lightbox-delete-btn').classList.toggle('hidden', !isAdmin);
     document.getElementById('lightbox-modal').classList.remove('hidden');
@@ -686,7 +758,9 @@ function openLightbox(id) {
 function closeLightbox(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     document.getElementById('lightbox-modal').classList.add('hidden');
+    document.getElementById('lightbox-image').classList.remove('hidden');
     document.getElementById('lightbox-image').src = '';
+    document.getElementById('lightbox-file-preview').classList.add('hidden');
     currentLightboxShotId = null;
 }
 
