@@ -9,7 +9,7 @@
 		<link rel="stylesheet" href="style.css">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-		<script src="events.js?v=10" defer></script>
+		<script src="events.js?v=1" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -49,17 +49,14 @@
 				</div>
 				<p class="page-subtitle">All player here must show on leaderboard of SvS Preparation Phase</p>
 
-				<div class="leaderboard-columns">
-					<div class="leaderboard-column">
-						<h2 class="leaderboard-section-title">Top 100 <span id="top100-count" class="leaderboard-count-badge">0</span></h2>
-						<div class="leaderboard-list" id="top100-list"></div>
-						<p id="top100-empty" class="page-subtitle hidden" style="margin-top: 10px;">No players added yet.</p>
+				<div class="list-container leaderboard-tier-menu">
+					<div class="list-item leaderboard-tier-item" onclick="openLeaderboardTierModal('top100')" role="button" tabindex="0" aria-label="Open Top 100 leaderboard players">
+						<span class="leaderboard-tier-item-label"><span class="leaderboard-tier-icon">🥇</span> Top 100 <span id="top100-count" class="leaderboard-count-badge">0</span></span>
+						<span class="arrow">&gt;</span>
 					</div>
-
-					<div class="leaderboard-column">
-						<h2 class="leaderboard-section-title">Top 200 <span id="top200-count" class="leaderboard-count-badge">0</span></h2>
-						<div class="leaderboard-list" id="top200-list"></div>
-						<p id="top200-empty" class="page-subtitle hidden" style="margin-top: 10px;">No players added yet.</p>
+					<div class="list-item leaderboard-tier-item" onclick="openLeaderboardTierModal('top200')" role="button" tabindex="0" aria-label="Open Top 200 leaderboard players">
+						<span class="leaderboard-tier-item-label"><span class="leaderboard-tier-icon">🥈</span> Top 200 <span id="top200-count" class="leaderboard-count-badge">0</span></span>
+						<span class="arrow">&gt;</span>
 					</div>
 				</div>
 			</section>
@@ -158,6 +155,19 @@
 				<div class="form-actions">
 					<button class="btn-back" onclick="closePlayerModal()">Cancel</button>
 					<button id="player-submit-btn" class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitPlayer()">Save</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- LEADERBOARD TIER POPUP (shows Top 100 / Top 200 player list) -->
+		<div id="leaderboard-tier-modal" class="modal hidden" onclick="closeLeaderboardTierModal(event)">
+			<div class="modal-content leaderboard-tier-modal-content" onclick="event.stopPropagation()">
+				<span class="close-modal" onclick="closeLeaderboardTierModal(event)">&times;</span>
+				<h2 class="modal-title" id="leaderboard-tier-modal-title">Top 100</h2>
+				<p class="modal-subtitle" id="leaderboard-tier-modal-subtitle">0 players</p>
+				<div class="leaderboard-tier-modal-scroll">
+					<div class="leaderboard-list" id="leaderboard-tier-modal-list"></div>
+					<p id="leaderboard-tier-modal-empty" class="page-subtitle hidden" style="margin-top: 10px;">No players added yet.</p>
 				</div>
 			</div>
 		</div>

@@ -64,6 +64,10 @@ let isAdmin = false;
 let currentStaffUsername = null;
 let currentLeaderboardPlayers = []; // rows from leaderboard_players (both tiers)
 let currentEditPlayerId = null; // set while the Add/Edit modal is in "edit" mode
+let currentLeaderboardTier = null; // 'top100' | 'top200' while the tier popup is open, else null
+
+const LEADERBOARD_TIER_LABELS = { top100: 'Top 100', top200: 'Top 200' };
+const LEADERBOARD_TIER_ICONS = { top100: '🥇', top200: '🥈' };
 
 let currentEventType = null;   // one entry from EVENT_TYPES
 let currentDurations = [];     // rows from event_instances for currentEventType
@@ -361,6 +365,7 @@ function showEventMenu() {
     document.getElementById('event-gallery-page').classList.add('hidden');
     document.getElementById('leaderboard-page').classList.add('hidden');
     document.getElementById('event-menu-page').classList.remove('hidden');
+    closeLeaderboardTierModal();
 }
 
 // ================= PAGE 1b: MUST ON LEADERBOARD PLAYER (leaderboard_players) =================
@@ -371,6 +376,7 @@ function showLeaderboardPage() {
     document.getElementById('leaderboard-page').classList.remove('hidden');
 
     document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
+    closeLeaderboardTierModal();
 
     loadLeaderboardPlayers();
 }
@@ -379,10 +385,10 @@ async function loadLeaderboardPlayers() {
     const client = getSupabase();
     if (!client) return;
 
-    ['top100-list', 'top200-list'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = `<p class="page-subtitle" style="text-align:center;">Loading...</p>`;
-    });
+    if (currentLeaderboardTier) {
+        const listEl = document.getElementById('leaderboard-tier-modal-list');
+        if (listEl) listEl.innerHTML = `<p class="page-subtitle" style="text-align:center;">Loading...</p>`;
+    }
 
     const { data, error } = await client
         .from('leaderboard_players')
@@ -399,19 +405,47 @@ async function loadLeaderboardPlayers() {
     renderLeaderboardTables();
 }
 
+// Top 100 / Top 200 are two menu entries on the leaderboard page; tapping one
+// opens a popup (leaderboard-tier-modal) showing that tier's player cards.
 function renderLeaderboardTables() {
-    renderLeaderboardTier('top100');
-    renderLeaderboardTier('top200');
+    renderLeaderboardMenuCounts();
+    // Keep an already-open popup in sync (e.g. after a login/logout, or after
+    // adding/editing/deleting a player while the popup is open).
+    if (currentLeaderboardTier) renderLeaderboardTierList(currentLeaderboardTier);
 }
 
-function renderLeaderboardTier(tier) {
-    const listEl = document.getElementById(`${tier}-list`);
-    const emptyEl = document.getElementById(`${tier}-empty`);
-    const countEl = document.getElementById(`${tier}-count`);
-    if (!listEl || !emptyEl || !countEl) return;
+function renderLeaderboardMenuCounts() {
+    ['top100', 'top200'].forEach(tier => {
+        const countEl = document.getElementById(`${tier}-count`);
+        if (countEl) countEl.innerText = currentLeaderboardPlayers.filter(p => p.tier === tier).length;
+    });
+}
+
+function openLeaderboardTierModal(tier) {
+    if (!LEADERBOARD_TIER_LABELS[tier]) return;
+    currentLeaderboardTier = tier;
+
+    document.getElementById('leaderboard-tier-modal-title').innerText =
+        `${LEADERBOARD_TIER_ICONS[tier]} ${LEADERBOARD_TIER_LABELS[tier]}`;
+
+    renderLeaderboardTierList(tier);
+    document.getElementById('leaderboard-tier-modal').classList.remove('hidden');
+}
+
+function closeLeaderboardTierModal(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    document.getElementById('leaderboard-tier-modal')?.classList.add('hidden');
+    currentLeaderboardTier = null;
+}
+
+function renderLeaderboardTierList(tier) {
+    const listEl = document.getElementById('leaderboard-tier-modal-list');
+    const emptyEl = document.getElementById('leaderboard-tier-modal-empty');
+    const subtitleEl = document.getElementById('leaderboard-tier-modal-subtitle');
+    if (!listEl || !emptyEl || !subtitleEl) return;
 
     const rows = currentLeaderboardPlayers.filter(p => p.tier === tier);
-    countEl.innerText = rows.length;
+    subtitleEl.innerText = `${rows.length} player${rows.length === 1 ? '' : 's'} on this tier`;
 
     if (!rows.length) {
         listEl.innerHTML = '';
