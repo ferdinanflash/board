@@ -310,13 +310,115 @@ td:first-child, th:first-child {
 }
 
 /* ==================== MUST ON LEADERBOARD PLAYER ==================== */
-.leaderboard-section-title {
+.leaderboard-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 10px;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .leaderboard-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+.leaderboard-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.leaderboard-player-card {
+    background: linear-gradient(135deg, #1e2230 0%, #151821 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.leaderboard-player-rank {
+    background: #24262e;
+    color: #93c5fd;
+    border-radius: 8px;
+    min-width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 1.05rem;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.leaderboard-player-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.leaderboard-player-name {
+    font-weight: 700;
     color: #f1f5f9;
-    margin-bottom: 0;
+    font-size: 0.95rem;
+    word-break: break-word;
+}
+
+.leaderboard-player-id {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    margin-top: 2px;
+}
+
+.leaderboard-player-notes {
+    color: #93c5fd;
+    font-size: 0.8rem;
+    margin-top: 6px;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.leaderboard-player-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.leaderboard-edit-btn,
+.leaderboard-delete-btn {
+    background: transparent;
+    border: 1px solid rgba(59, 130, 246, 0.5);
+    color: #93c5fd;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.leaderboard-edit-btn:hover {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.leaderboard-delete-btn {
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #f87171;
+}
+
+.leaderboard-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
 }
 
 .leaderboard-count-badge {
@@ -329,19 +431,13 @@ td:first-child, th:first-child {
     font-weight: 700;
 }
 
-.leaderboard-delete-btn {
-    background: transparent;
-    border: 1px solid rgba(239, 68, 68, 0.5);
-    color: #f87171;
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.leaderboard-delete-btn:hover {
-    background: rgba(239, 68, 68, 0.15);
+.leaderboard-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.05rem;
+    color: #f1f5f9;
+    margin-bottom: 0;
 }
 
 /* ==================== ANIMASI SVG PEDANG BERADU ==================== */

@@ -63,6 +63,7 @@ let supabaseClient = null;
 let isAdmin = false;
 let currentStaffUsername = null;
 let currentLeaderboardPlayers = []; // rows from leaderboard_players (both tiers)
+let currentEditPlayerId = null; // set while the Add/Edit modal is in "edit" mode
 
 let currentEventType = null;   // one entry from EVENT_TYPES
 let currentDurations = [];     // rows from event_instances for currentEventType
@@ -136,8 +137,6 @@ function updateAdminUI() {
     document.getElementById('upload-screenshot-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('delete-duration-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
-    document.getElementById('top100-action-head')?.classList.toggle('hidden', !isAdmin);
-    document.getElementById('top200-action-head')?.classList.toggle('hidden', !isAdmin);
     if (currentLeaderboardPlayers.length) renderLeaderboardTables();
 
     const storageBar = document.getElementById('admin-storage-bar');
@@ -372,8 +371,6 @@ function showLeaderboardPage() {
     document.getElementById('leaderboard-page').classList.remove('hidden');
 
     document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
-    document.getElementById('top100-action-head')?.classList.toggle('hidden', !isAdmin);
-    document.getElementById('top200-action-head')?.classList.toggle('hidden', !isAdmin);
 
     loadLeaderboardPlayers();
 }
@@ -382,9 +379,9 @@ async function loadLeaderboardPlayers() {
     const client = getSupabase();
     if (!client) return;
 
-    ['top100-table-body', 'top200-table-body'].forEach(id => {
+    ['top100-list', 'top200-list'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.innerHTML = `<tr><td colspan="5" style="text-align:center;">Loading...</td></tr>`;
+        if (el) el.innerHTML = `<p class="page-subtitle" style="text-align:center;">Loading...</p>`;
     });
 
     const { data, error } = await client
@@ -408,45 +405,67 @@ function renderLeaderboardTables() {
 }
 
 function renderLeaderboardTier(tier) {
-    const bodyEl = document.getElementById(`${tier}-table-body`);
+    const listEl = document.getElementById(`${tier}-list`);
     const emptyEl = document.getElementById(`${tier}-empty`);
     const countEl = document.getElementById(`${tier}-count`);
-    if (!bodyEl || !emptyEl || !countEl) return;
+    if (!listEl || !emptyEl || !countEl) return;
 
     const rows = currentLeaderboardPlayers.filter(p => p.tier === tier);
     countEl.innerText = rows.length;
 
     if (!rows.length) {
-        bodyEl.innerHTML = '';
+        listEl.innerHTML = '';
         emptyEl.classList.remove('hidden');
         return;
     }
     emptyEl.classList.add('hidden');
 
-    bodyEl.innerHTML = rows.map((p, idx) => `
-        <tr>
-            <td>${idx + 1}</td>
-            <td style="text-align:left;">${escapeHtml(p.nickname)}</td>
-            <td>${escapeHtml(p.game_id)}</td>
-            <td style="text-align:left; white-space:normal;">${escapeHtml(p.notes) || '<span style="color:#626773;">-</span>'}</td>
-            <td class="${isAdmin ? '' : 'hidden'}">
+    listEl.innerHTML = rows.map((p, idx) => `
+        <div class="leaderboard-player-card">
+            <div class="leaderboard-player-rank">${idx + 1}</div>
+            <div class="leaderboard-player-info">
+                <div class="leaderboard-player-name">${escapeHtml(p.nickname)}</div>
+                <div class="leaderboard-player-id">ID: ${escapeHtml(p.game_id)}</div>
+                ${p.notes ? `<div class="leaderboard-player-notes">📝 ${escapeHtml(p.notes)}</div>` : ''}
+            </div>
+            <div class="leaderboard-player-actions ${isAdmin ? '' : 'hidden'}">
+                <button class="leaderboard-edit-btn" onclick="openPlayerModal('edit', ${p.id})">Edit</button>
                 <button class="leaderboard-delete-btn" onclick="deleteLeaderboardPlayer(${p.id})">Delete</button>
-            </td>
-        </tr>
+            </div>
+        </div>
     `).join('');
 }
 
-function openPlayerModal() {
+function openPlayerModal(mode, id) {
     if (!isAdmin) return;
-    document.getElementById('input-player-tier').value = 'top100';
-    document.getElementById('input-player-nickname').value = '';
-    document.getElementById('input-player-gameid').value = '';
-    document.getElementById('input-player-notes').value = '';
+
+    if (mode === 'edit') {
+        const player = currentLeaderboardPlayers.find(p => p.id === id);
+        if (!player) return;
+
+        currentEditPlayerId = player.id;
+        document.getElementById('player-modal-title').innerText = 'Edit Leaderboard Player';
+        document.getElementById('input-player-tier').value = player.tier;
+        document.getElementById('input-player-nickname').value = player.nickname;
+        document.getElementById('input-player-gameid').value = player.game_id;
+        document.getElementById('input-player-notes').value = player.notes || '';
+        document.getElementById('player-submit-btn').innerText = 'Update';
+    } else {
+        currentEditPlayerId = null;
+        document.getElementById('player-modal-title').innerText = 'Add Leaderboard Player';
+        document.getElementById('input-player-tier').value = 'top100';
+        document.getElementById('input-player-nickname').value = '';
+        document.getElementById('input-player-gameid').value = '';
+        document.getElementById('input-player-notes').value = '';
+        document.getElementById('player-submit-btn').innerText = 'Save';
+    }
+
     document.getElementById('player-modal').classList.remove('hidden');
     document.getElementById('input-player-nickname').focus();
 }
 
 function closePlayerModal() {
+    currentEditPlayerId = null;
     document.getElementById('player-modal').classList.add('hidden');
 }
 
@@ -469,23 +488,32 @@ async function submitPlayer() {
     const submitBtn = document.getElementById('player-submit-btn');
     if (submitBtn) submitBtn.disabled = true;
 
-    const { error } = await client.from('leaderboard_players').insert({
-        tier,
-        nickname,
-        game_id: gameId,
-        notes: notes || null,
-        created_by: currentStaffUsername
-    });
+    const isEditing = !!currentEditPlayerId;
+
+    const { error } = isEditing
+        ? await client.from('leaderboard_players').update({
+              tier,
+              nickname,
+              game_id: gameId,
+              notes: notes || null
+          }).eq('id', currentEditPlayerId)
+        : await client.from('leaderboard_players').insert({
+              tier,
+              nickname,
+              game_id: gameId,
+              notes: notes || null,
+              created_by: currentStaffUsername
+          });
 
     if (submitBtn) submitBtn.disabled = false;
 
     if (error) {
-        showToast('Failed to add player', 'error');
+        showToast(isEditing ? 'Failed to update player' : 'Failed to add player', 'error');
         return;
     }
 
     closePlayerModal();
-    showToast('Player added!', 'success');
+    showToast(isEditing ? 'Player updated!' : 'Player added!', 'success');
     loadLeaderboardPlayers();
 }
 
