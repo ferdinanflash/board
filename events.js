@@ -422,12 +422,12 @@ function renderLeaderboardTier(tier) {
 
     listEl.innerHTML = rows.map((p, idx) => `
         <div class="leaderboard-player-card">
-            <div class="leaderboard-player-rank">${idx + 1}</div>
-            <div class="leaderboard-player-info">
+            <div class="leaderboard-player-header">
+                <div class="leaderboard-player-rank">${idx + 1}</div>
                 <div class="leaderboard-player-name">${escapeHtml(p.nickname)}</div>
-                <div class="leaderboard-player-id">ID: ${escapeHtml(p.game_id)}</div>
-                ${p.notes ? `<div class="leaderboard-player-notes">📝 ${escapeHtml(p.notes)}</div>` : ''}
             </div>
+            <div class="leaderboard-player-id">ID: ${escapeHtml(p.game_id)}</div>
+            ${p.notes ? `<div class="leaderboard-player-notes">📝 ${escapeHtml(p.notes)}</div>` : ''}
             <div class="leaderboard-player-actions ${isAdmin ? '' : 'hidden'}">
                 <button class="leaderboard-edit-btn" onclick="openPlayerModal('edit', ${p.id})">Edit</button>
                 <button class="leaderboard-delete-btn" onclick="deleteLeaderboardPlayer(${p.id})">Delete</button>

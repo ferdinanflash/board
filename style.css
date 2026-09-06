@@ -313,15 +313,9 @@ td:first-child, th:first-child {
 .leaderboard-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: 10px;
     margin-top: 10px;
     align-items: start;
-}
-
-@media (max-width: 640px) {
-    .leaderboard-columns {
-        grid-template-columns: 1fr;
-    }
 }
 
 .leaderboard-column {
@@ -333,79 +327,84 @@ td:first-child, th:first-child {
 .leaderboard-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
+    gap: 8px;
+    margin-top: 10px;
 }
 
 .leaderboard-player-card {
     background: linear-gradient(135deg, #1e2230 0%, #151821 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 12px 14px;
+    border-radius: 10px;
+    padding: 8px 10px;
     display: flex;
-    gap: 12px;
-    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    min-width: 0;
+}
+
+.leaderboard-player-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .leaderboard-player-rank {
     background: #24262e;
     color: #93c5fd;
-    border-radius: 8px;
-    min-width: 28px;
-    height: 28px;
+    border-radius: 6px;
+    min-width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.68rem;
     flex-shrink: 0;
-}
-
-.leaderboard-player-info {
-    flex: 1;
-    min-width: 0;
 }
 
 .leaderboard-player-name {
     font-weight: 700;
     color: #f1f5f9;
-    font-size: 0.95rem;
+    font-size: 0.8rem;
     word-break: break-word;
+    line-height: 1.25;
+    min-width: 0;
 }
 
 .leaderboard-player-id {
     color: #94a3b8;
-    font-size: 0.8rem;
-    margin-top: 2px;
+    font-size: 0.68rem;
+    word-break: break-word;
 }
 
 .leaderboard-player-notes {
     color: #93c5fd;
-    font-size: 0.8rem;
-    margin-top: 6px;
+    font-size: 0.68rem;
     word-break: break-word;
-    line-height: 1.4;
+    line-height: 1.35;
 }
 
 .leaderboard-player-actions {
     display: flex;
-    flex-direction: column;
     gap: 6px;
-    flex-shrink: 0;
+    margin-top: 4px;
 }
 
 .leaderboard-edit-btn,
 .leaderboard-delete-btn {
+    flex: 1;
     background: transparent;
     border: 1px solid rgba(59, 130, 246, 0.5);
     color: #93c5fd;
     border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 0.75rem;
+    padding: 4px 4px;
+    font-size: 0.68rem;
     cursor: pointer;
     transition: all 0.2s ease;
     white-space: nowrap;
+    text-align: center;
 }
 
 .leaderboard-edit-btn:hover {
@@ -435,7 +434,7 @@ td:first-child, th:first-child {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     color: #f1f5f9;
     margin-bottom: 0;
 }
