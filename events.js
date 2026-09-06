@@ -53,10 +53,16 @@ const EVENT_TYPES = [
     { key: 'state_of_power_svs', label: 'State of Power (SvS)', icon: '🔥' },
 ];
 
+// Not a recurring event with durations/screenshots like EVENT_TYPES above —
+// this opens the dedicated "leaderboard-page" (two tables: Top 100 / Top 200)
+// instead of the duration -> gallery flow.
+const LEADERBOARD_MENU_ITEM = { key: 'leaderboard_players', label: 'Must on Leaderboard Player', icon: '🏆' };
+
 // ================= STATE =================
 let supabaseClient = null;
 let isAdmin = false;
 let currentStaffUsername = null;
+let currentLeaderboardPlayers = []; // rows from leaderboard_players (both tiers)
 
 let currentEventType = null;   // one entry from EVENT_TYPES
 let currentDurations = [];     // rows from event_instances for currentEventType
@@ -83,6 +89,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (loginPasswordInput) {
         loginPasswordInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') submitStaffLogin();
+        });
+    }
+
+    const playerGameIdInput = document.getElementById('input-player-gameid');
+    if (playerGameIdInput) {
+        playerGameIdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitPlayer();
         });
     }
 });
@@ -115,6 +128,10 @@ function updateAdminUI() {
     document.getElementById('add-duration-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('upload-screenshot-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('delete-duration-btn')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('top100-action-head')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('top200-action-head')?.classList.toggle('hidden', !isAdmin);
+    if (currentLeaderboardPlayers.length) renderLeaderboardTables();
 
     const storageBar = document.getElementById('admin-storage-bar');
     if (storageBar) {
@@ -171,6 +188,8 @@ function refreshCurrentView() {
         loadScreenshots(currentDuration.id);
     } else if (currentEventType) {
         loadDurations(currentEventType.key);
+    } else if (!document.getElementById('leaderboard-page')?.classList.contains('hidden')) {
+        loadLeaderboardPlayers();
     }
 }
 
@@ -293,12 +312,21 @@ function renderEventTypeList() {
     const container = document.getElementById('event-type-list');
     if (!container) return;
 
-    container.innerHTML = EVENT_TYPES.map(ev => `
+    const eventItemsHtml = EVENT_TYPES.map(ev => `
         <div class="list-item" onclick="selectEventType('${ev.key}')" role="button" tabindex="0" aria-label="${escapeHtml(ev.label)}">
             <span>${ev.icon} ${escapeHtml(ev.label)}</span>
             <span class="arrow">&gt;</span>
         </div>
     `).join('');
+
+    const leaderboardItemHtml = `
+        <div class="list-item" onclick="showLeaderboardPage()" role="button" tabindex="0" aria-label="${escapeHtml(LEADERBOARD_MENU_ITEM.label)}">
+            <span>${LEADERBOARD_MENU_ITEM.icon} ${escapeHtml(LEADERBOARD_MENU_ITEM.label)}</span>
+            <span class="arrow">&gt;</span>
+        </div>
+    `;
+
+    container.innerHTML = eventItemsHtml + leaderboardItemHtml;
 }
 
 function selectEventType(key) {
@@ -325,7 +353,150 @@ function showEventMenu() {
 
     document.getElementById('event-duration-page').classList.add('hidden');
     document.getElementById('event-gallery-page').classList.add('hidden');
+    document.getElementById('leaderboard-page').classList.add('hidden');
     document.getElementById('event-menu-page').classList.remove('hidden');
+}
+
+// ================= PAGE 1b: MUST ON LEADERBOARD PLAYER (leaderboard_players) =================
+function showLeaderboardPage() {
+    document.getElementById('event-menu-page').classList.add('hidden');
+    document.getElementById('event-duration-page').classList.add('hidden');
+    document.getElementById('event-gallery-page').classList.add('hidden');
+    document.getElementById('leaderboard-page').classList.remove('hidden');
+
+    document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('top100-action-head')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('top200-action-head')?.classList.toggle('hidden', !isAdmin);
+
+    loadLeaderboardPlayers();
+}
+
+async function loadLeaderboardPlayers() {
+    const client = getSupabase();
+    if (!client) return;
+
+    ['top100-table-body', 'top200-table-body'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = `<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>`;
+    });
+
+    const { data, error } = await client
+        .from('leaderboard_players')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        showToast('Failed to load leaderboard players', 'error');
+        currentLeaderboardPlayers = [];
+    } else {
+        currentLeaderboardPlayers = data || [];
+    }
+
+    renderLeaderboardTables();
+}
+
+function renderLeaderboardTables() {
+    renderLeaderboardTier('top100');
+    renderLeaderboardTier('top200');
+}
+
+function renderLeaderboardTier(tier) {
+    const bodyEl = document.getElementById(`${tier}-table-body`);
+    const emptyEl = document.getElementById(`${tier}-empty`);
+    const countEl = document.getElementById(`${tier}-count`);
+    if (!bodyEl || !emptyEl || !countEl) return;
+
+    const rows = currentLeaderboardPlayers.filter(p => p.tier === tier);
+    countEl.innerText = rows.length;
+
+    if (!rows.length) {
+        bodyEl.innerHTML = '';
+        emptyEl.classList.remove('hidden');
+        return;
+    }
+    emptyEl.classList.add('hidden');
+
+    bodyEl.innerHTML = rows.map((p, idx) => `
+        <tr>
+            <td>${idx + 1}</td>
+            <td style="text-align:left;">${escapeHtml(p.nickname)}</td>
+            <td>${escapeHtml(p.game_id)}</td>
+            <td class="${isAdmin ? '' : 'hidden'}">
+                <button class="leaderboard-delete-btn" onclick="deleteLeaderboardPlayer(${p.id})">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openPlayerModal() {
+    if (!isAdmin) return;
+    document.getElementById('input-player-tier').value = 'top100';
+    document.getElementById('input-player-nickname').value = '';
+    document.getElementById('input-player-gameid').value = '';
+    document.getElementById('player-modal').classList.remove('hidden');
+    document.getElementById('input-player-nickname').focus();
+}
+
+function closePlayerModal() {
+    document.getElementById('player-modal').classList.add('hidden');
+}
+
+async function submitPlayer() {
+    if (!isAdmin) return;
+
+    const tier = document.getElementById('input-player-tier').value;
+    const nickname = document.getElementById('input-player-nickname').value.trim();
+    const gameId = document.getElementById('input-player-gameid').value.trim();
+
+    if (!nickname || !gameId) {
+        showToast('Please enter both nickname and ID in-game', 'warning');
+        return;
+    }
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const submitBtn = document.getElementById('player-submit-btn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    const { error } = await client.from('leaderboard_players').insert({
+        tier,
+        nickname,
+        game_id: gameId,
+        created_by: currentStaffUsername
+    });
+
+    if (submitBtn) submitBtn.disabled = false;
+
+    if (error) {
+        showToast('Failed to add player', 'error');
+        return;
+    }
+
+    closePlayerModal();
+    showToast('Player added!', 'success');
+    loadLeaderboardPlayers();
+}
+
+function deleteLeaderboardPlayer(id) {
+    if (!isAdmin) return;
+    const player = currentLeaderboardPlayers.find(p => p.id === id);
+    if (!player) return;
+
+    showCustomConfirm(`Remove ${player.nickname} from this leaderboard list?`, async () => {
+        const client = getSupabase();
+        if (!client) return;
+
+        const { error } = await client.from('leaderboard_players').delete().eq('id', id);
+
+        if (error) {
+            showToast('Failed to remove player', 'error');
+            return;
+        }
+
+        showToast('Player removed', 'success');
+        loadLeaderboardPlayers();
+    });
 }
 
 // ================= PAGE 2: EVENT DURATIONS (event_instances) =================

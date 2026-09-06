@@ -39,6 +39,49 @@
 				</div>
 			</section>
 
+			<!-- PAGE 1b: MUST ON LEADERBOARD PLAYER (SvS Preparation Phase) -->
+			<section id="leaderboard-page" class="hidden">
+				<button class="btn-back" onclick="showEventMenu()">&lt; Back to Events</button>
+
+				<div class="schedule-actions">
+					<h1 class="page-title" style="margin-bottom:0;">🏆 Must on Leaderboard Player</h1>
+					<button id="add-player-btn" class="btn-apply hidden" style="margin-bottom:0; padding: 10px 16px; font-size: 0.9rem;" onclick="openPlayerModal()">+ Add Player</button>
+				</div>
+				<p class="page-subtitle">All player here must show on leaderboard of SvS Preparation Phase</p>
+
+				<h2 class="leaderboard-section-title">Top 100 <span id="top100-count" class="leaderboard-count-badge">0</span></h2>
+				<div class="table-container">
+					<table>
+						<thead>
+							<tr>
+								<th>#</th>
+								<th>Nickname</th>
+								<th>ID In-Game</th>
+								<th id="top100-action-head" class="hidden">Action</th>
+							</tr>
+						</thead>
+						<tbody id="top100-table-body"></tbody>
+					</table>
+				</div>
+				<p id="top100-empty" class="page-subtitle hidden" style="margin-top: 10px;">No players added yet.</p>
+
+				<h2 class="leaderboard-section-title" style="margin-top: 28px;">Top 200 <span id="top200-count" class="leaderboard-count-badge">0</span></h2>
+				<div class="table-container">
+					<table>
+						<thead>
+							<tr>
+								<th>#</th>
+								<th>Nickname</th>
+								<th>ID In-Game</th>
+								<th id="top200-action-head" class="hidden">Action</th>
+							</tr>
+						</thead>
+						<tbody id="top200-table-body"></tbody>
+					</table>
+				</div>
+				<p id="top200-empty" class="page-subtitle hidden" style="margin-top: 10px;">No players added yet.</p>
+			</section>
+
 			<!-- PAGE 2: EVENT DURATION LIST (each entry = one run of that event) -->
 			<section id="event-duration-page" class="hidden">
 				<button class="btn-back" onclick="showEventMenu()">&lt; Back to Events</button>
@@ -96,6 +139,38 @@
 				<div class="form-actions">
 					<button class="btn-back" onclick="closeDurationModal()">Cancel</button>
 					<button class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitDuration()">Save</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ADD LEADERBOARD PLAYER MODAL -->
+		<div id="player-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closePlayerModal()">&times;</span>
+				<h2 class="modal-title">Add Leaderboard Player</h2>
+				<p class="modal-subtitle">Add a player who must show on leaderboard of SvS Preparation Phase.</p>
+
+				<div class="form-group">
+					<label>Tier</label>
+					<select id="input-player-tier">
+						<option value="top100">Top 100</option>
+						<option value="top200">Top 200</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>Nickname</label>
+					<input type="text" id="input-player-nickname" placeholder="Enter in-game nickname" autocomplete="off">
+				</div>
+
+				<div class="form-group">
+					<label>ID In-Game</label>
+					<input type="text" id="input-player-gameid" placeholder="Enter in-game ID" autocomplete="off" inputmode="numeric">
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-back" onclick="closePlayerModal()">Cancel</button>
+					<button id="player-submit-btn" class="btn-apply" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);" onclick="submitPlayer()">Save</button>
 				</div>
 			</div>
 		</div>
