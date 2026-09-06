@@ -334,6 +334,15 @@ td:first-child, th:first-child {
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* The Edit/Delete buttons inside this popup open ANOTHER modal (player-modal)
+   or confirm dialog on top of it. All .modal elements share the same
+   z-index, so the one later in the HTML would otherwise win regardless of
+   which was opened first/last — pin this popup a layer below so anything
+   opened from within it always renders on top, no matter its DOM order. */
+#leaderboard-tier-modal {
+    z-index: 1999;
+}
+
 .leaderboard-tier-modal-scroll {
     overflow-y: auto;
     max-height: 60vh;
