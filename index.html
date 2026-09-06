@@ -9,7 +9,7 @@
 		<link rel="stylesheet" href="style.css">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-		<script src="events.js?v=4" defer></script>
+		<script src="events.js?v=1" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -57,6 +57,7 @@
 								<th>#</th>
 								<th>Nickname</th>
 								<th>ID In-Game</th>
+								<th>Notes</th>
 								<th id="top100-action-head" class="hidden">Action</th>
 							</tr>
 						</thead>
@@ -73,6 +74,7 @@
 								<th>#</th>
 								<th>Nickname</th>
 								<th>ID In-Game</th>
+								<th>Notes</th>
 								<th id="top200-action-head" class="hidden">Action</th>
 							</tr>
 						</thead>
@@ -166,6 +168,11 @@
 				<div class="form-group">
 					<label>ID In-Game</label>
 					<input type="text" id="input-player-gameid" placeholder="Enter in-game ID" autocomplete="off" inputmode="numeric">
+				</div>
+
+				<div class="form-group">
+					<label>Notes (optional)</label>
+					<input type="text" id="input-player-notes" placeholder="e.g. inactive, need help, contacted..." autocomplete="off">
 				</div>
 
 				<div class="form-actions">

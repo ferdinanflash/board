@@ -9,9 +9,15 @@ create table if not exists public.leaderboard_players (
     tier text not null check (tier in ('top100', 'top200')),
     nickname text not null,
     game_id text not null,
+    notes text,
     created_by text,
     created_at timestamptz not null default now()
 );
+
+-- If the table already existed from an earlier setup (before the Notes
+-- column was added), this adds the column without touching existing rows.
+alter table public.leaderboard_players
+    add column if not exists notes text;
 
 create index if not exists leaderboard_players_tier_idx
     on public.leaderboard_players (tier, created_at);

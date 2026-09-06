@@ -98,6 +98,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.key === 'Enter') submitPlayer();
         });
     }
+
+    const playerNotesInput = document.getElementById('input-player-notes');
+    if (playerNotesInput) {
+        playerNotesInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') submitPlayer();
+        });
+    }
 });
 
 function getSupabase() {
@@ -377,7 +384,7 @@ async function loadLeaderboardPlayers() {
 
     ['top100-table-body', 'top200-table-body'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.innerHTML = `<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>`;
+        if (el) el.innerHTML = `<tr><td colspan="5" style="text-align:center;">Loading...</td></tr>`;
     });
 
     const { data, error } = await client
@@ -421,6 +428,7 @@ function renderLeaderboardTier(tier) {
             <td>${idx + 1}</td>
             <td style="text-align:left;">${escapeHtml(p.nickname)}</td>
             <td>${escapeHtml(p.game_id)}</td>
+            <td style="text-align:left; white-space:normal;">${escapeHtml(p.notes) || '<span style="color:#626773;">-</span>'}</td>
             <td class="${isAdmin ? '' : 'hidden'}">
                 <button class="leaderboard-delete-btn" onclick="deleteLeaderboardPlayer(${p.id})">Delete</button>
             </td>
@@ -433,6 +441,7 @@ function openPlayerModal() {
     document.getElementById('input-player-tier').value = 'top100';
     document.getElementById('input-player-nickname').value = '';
     document.getElementById('input-player-gameid').value = '';
+    document.getElementById('input-player-notes').value = '';
     document.getElementById('player-modal').classList.remove('hidden');
     document.getElementById('input-player-nickname').focus();
 }
@@ -447,6 +456,7 @@ async function submitPlayer() {
     const tier = document.getElementById('input-player-tier').value;
     const nickname = document.getElementById('input-player-nickname').value.trim();
     const gameId = document.getElementById('input-player-gameid').value.trim();
+    const notes = document.getElementById('input-player-notes').value.trim();
 
     if (!nickname || !gameId) {
         showToast('Please enter both nickname and ID in-game', 'warning');
@@ -463,6 +473,7 @@ async function submitPlayer() {
         tier,
         nickname,
         game_id: gameId,
+        notes: notes || null,
         created_by: currentStaffUsername
     });
 
