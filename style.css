@@ -1014,6 +1014,42 @@ th.sortable:hover { color: #f1f5f9; }
     .lightbox-slide img { transition: none; }
 }
 
+/* One-time gesture hint */
+.lightbox-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 4;
+    max-width: 90%;
+    padding: 8px 16px;
+    background: rgba(21, 24, 33, 0.92);
+    color: #e2e4ea;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.lightbox-hint.show { opacity: 1; }
+
+/* Keep toasts (e.g. "Link copied") away from the viewer's top-bar buttons */
+.lightbox-open .toast-container {
+    top: auto;
+    bottom: 96px;
+    right: 50%;
+    transform: translateX(50%);
+    align-items: center;
+}
+
+/* Touch screens zoom with pinch / double-tap, so the +/- buttons would only crowd the top bar */
+@media (pointer: coarse) {
+    .lightbox-zoom-controls { display: none; }
+}
+
 /* Left / right arrows */
 .lightbox-nav {
     position: absolute;

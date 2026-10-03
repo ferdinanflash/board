@@ -111,6 +111,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (e.key === 'Enter') submitPlayer();
         });
     }
+
+    // Opened from a shared link like  ...#foto=123  -> jump straight to that file.
+    openLightboxFromHash();
 });
 
 function getSupabase() {
@@ -695,7 +698,7 @@ function selectDuration(id) {
     document.getElementById('upload-screenshot-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('delete-duration-btn')?.classList.toggle('hidden', !isAdmin);
 
-    loadScreenshots(d.id);
+    return loadScreenshots(d.id);
 }
 
 function showDurationList() {
@@ -1024,6 +1027,9 @@ let lbTy = 0;
 let lbIsImage = true;
 let lightboxLoadToken = 0;
 let lightboxThumbsKey = '';
+let lbHistoryPushed = false; // true while the lightbox owns a browser-history entry (so Back closes it)
+let lbHintTimer = null;
+const LIGHTBOX_HINT_KEY = 'eventReports.lightboxHintSeen';
 
 function lbEl(id) { return document.getElementById(id); }
 
@@ -1066,6 +1072,7 @@ function setLightboxScale(newScale, clientX, clientY, animate) {
     const py = (clientY == null ? cy : clientY) - cy;
 
     newScale = clampNumber(newScale, 1, LIGHTBOX_MAX_SCALE);
+    if (newScale !== lbScale) hideLightboxHint();
     const ratio = newScale / lbScale;
     lbTx = px - (px - lbTx) * ratio;
     lbTy = py - (py - lbTy) * ratio;
@@ -1097,7 +1104,7 @@ function getLightboxList() {
     return visible.some(s => s.id === currentLightboxShotId) ? visible : currentScreenshots;
 }
 
-function openLightbox(id, direction) {
+function openLightbox(id, direction, fromHistory) {
     const shot = currentScreenshots.find(s => s.id === id);
     if (!shot) return;
 
@@ -1153,9 +1160,25 @@ function openLightbox(id, direction) {
     lbEl('lightbox-zoom-controls').classList.toggle('hidden', !lbIsImage);
     lbEl('lightbox-delete-btn').classList.toggle('hidden', !isAdmin);
 
+    // Browser history: the first open pushes ONE entry (#foto=ID) so the phone's Back
+    // button closes the viewer instead of leaving the page; moving between files only
+    // rewrites that entry, so Back never has to step through every photo.
+    try {
+        if (fromHistory) {
+            lbHistoryPushed = true;
+        } else if (!wasOpen) {
+            history.pushState({ lightbox: true }, '', '#foto=' + id);
+            lbHistoryPushed = true;
+        } else {
+            history.replaceState({ lightbox: true }, '', '#foto=' + id);
+        }
+    } catch (err) { /* history API unavailable (e.g. sandboxed iframe) - viewer still works */ }
+
     modal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+    document.body.classList.add('lightbox-open');
     updateLightboxNav();
+    if (!wasOpen) maybeShowLightboxHint();
 }
 
 // Moves to the previous (-1) or next (+1) file. Wraps around at the ends.
@@ -1169,6 +1192,7 @@ function navigateLightbox(direction, e) {
     if (idx === -1) return;
 
     const next = list[(idx + direction + list.length) % list.length];
+    hideLightboxHint();
     openLightbox(next.id, direction);
 }
 
@@ -1220,8 +1244,22 @@ function renderLightboxThumbs(list) {
     });
 }
 
+// Closes the viewer from the UI (X button, Esc, tap on empty area, after delete).
+// If the viewer added a history entry, go back one step to remove it again.
 function closeLightbox(e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    hideLightboxView();
+    if (lbHistoryPushed) {
+        lbHistoryPushed = false;
+        try {
+            if (history.state && history.state.lightbox) history.back();
+        } catch (err) { /* ignore */ }
+    }
+}
+
+// Only hides the viewer and resets its state (no history changes).
+function hideLightboxView() {
+    hideLightboxHint();
     lightboxLoadToken++;
     const imageEl = lbEl('lightbox-image');
     lbEl('lightbox-modal').classList.add('hidden');
@@ -1235,7 +1273,91 @@ function closeLightbox(e) {
     lightboxThumbsKey = '';
     resetLightboxZoom();
     document.body.style.overflow = '';
+    document.body.classList.remove('lightbox-open');
     currentLightboxShotId = null;
+}
+
+// ---- One-time gesture hint (shown the very first time the viewer is opened) ----
+function maybeShowLightboxHint() {
+    try {
+        if (localStorage.getItem(LIGHTBOX_HINT_KEY) === '1') return;
+    } catch (err) { return; } // storage blocked: skip rather than nag on every open
+
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const parts = [];
+    if (getLightboxList().length > 1) parts.push(touch ? 'Swipe to switch' : 'Use \u2190 \u2192 to switch');
+    if (lbIsImage) parts.push(touch ? 'Double-tap to zoom' : 'Scroll or double-click to zoom');
+    if (!parts.length) return; // nothing worth explaining (single non-image file)
+
+    const el = lbEl('lightbox-hint');
+    el.innerText = parts.join('  \u00b7  ');
+    el.classList.add('show');
+    try { localStorage.setItem(LIGHTBOX_HINT_KEY, '1'); } catch (err) { /* ignore */ }
+
+    clearTimeout(lbHintTimer);
+    lbHintTimer = setTimeout(hideLightboxHint, 4000);
+}
+
+function hideLightboxHint() {
+    clearTimeout(lbHintTimer);
+    const el = lbEl('lightbox-hint');
+    if (el) el.classList.remove('show');
+}
+
+// ---- Share / deep links (#foto=ID) ----
+function getShotShareUrl(id) {
+    const u = new URL(window.location.href);
+    u.hash = 'foto=' + id;
+    return u.toString();
+}
+
+async function shareCurrentScreenshot() {
+    if (currentLightboxShotId == null) return;
+    const url = getShotShareUrl(currentLightboxShotId);
+
+    // On phones, open the native share sheet (WhatsApp, Discord, ...).
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (touch && navigator.share) {
+        try {
+            await navigator.share({ title: document.title, url });
+            return;
+        } catch (err) {
+            if (err && err.name === 'AbortError') return; // user closed the sheet
+        }
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast('Link copied', 'success');
+    } catch (err) {
+        window.prompt('Copy this link:', url);
+    }
+}
+
+// Opens the file referenced by the current #foto=ID hash: works out which
+// event + duration it belongs to, shows that gallery, then opens the viewer.
+async function openLightboxFromHash() {
+    const m = window.location.hash.match(/^#foto=(\d+)$/);
+    if (!m) return;
+    const shotId = Number(m[1]);
+
+    // Drop the hash so the viewer can add its own history entry cleanly.
+    const cleanUrl = window.location.pathname + window.location.search;
+    try { history.replaceState(null, '', cleanUrl); } catch (err) { /* ignore */ }
+
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: shot } = await client.from('event_screenshots').select('*').eq('id', shotId).maybeSingle();
+    if (!shot) { showToast('That file is no longer available', 'error'); return; }
+
+    const { data: inst } = await client.from('event_instances').select('*').eq('id', shot.event_instance_id).maybeSingle();
+    const ev = inst && EVENT_TYPES.find(e => e.key === inst.event_name);
+    if (!inst || !ev) { showToast('That file is no longer available', 'error'); return; }
+
+    selectEventType(ev.key);          // shows the duration page and starts loading the list
+    currentDurations = [inst];        // enough for selectDuration(); the full list replaces it when loaded
+    await selectDuration(inst.id);    // shows the gallery and waits for its files
+    openLightbox(shotId);
 }
 
 // Saves the current file to the device. Fetching as a blob makes the browser
@@ -1266,6 +1388,30 @@ async function downloadCurrentScreenshot() {
 function initLightbox() {
     const stage = lbEl('lightbox-stage');
     if (!stage) return;
+
+    // ----- browser Back / Forward -----
+    window.addEventListener('popstate', () => {
+        const m = window.location.hash.match(/^#foto=(\d+)$/);
+        if (isLightboxOpen()) {
+            if (!m) {
+                // Back pressed while viewing: just close (the entry is already gone).
+                lbHistoryPushed = false;
+                hideLightboxView();
+            } else {
+                const id = Number(m[1]);
+                if (id !== currentLightboxShotId && currentScreenshots.some(s => s.id === id)) {
+                    openLightbox(id, 0, true);
+                }
+            }
+            return;
+        }
+        if (m) {
+            // Forward onto a viewer entry (or a hand-edited hash).
+            const id = Number(m[1]);
+            if (currentScreenshots.some(s => s.id === id)) openLightbox(id, 0, true);
+            else openLightboxFromHash();
+        }
+    });
 
     // ----- keyboard -----
     document.addEventListener('keydown', (e) => {

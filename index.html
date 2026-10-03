@@ -6,10 +6,10 @@
 		<title>3475 All Event Reports</title>
 		<meta name="description" content="3475 All Event report screenshot archive, organized by event and date range.">
 		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
-		<link rel="stylesheet" href="style.css?v=2">
+		<link rel="stylesheet" href="style.css?v=3">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-		<script src="events.js?v=2" defer></script>
+		<script src="events.js?v=3" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -190,6 +190,7 @@
 						<button type="button" class="lightbox-icon-btn" onclick="zoomLightboxBy(1 / 1.5)" title="Zoom out (-)" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M8 11h6"/></svg></button>
 						<button type="button" class="lightbox-icon-btn" onclick="zoomLightboxBy(1.5)" title="Zoom in (+)" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/></svg></button>
 					</div>
+					<button type="button" id="lightbox-share-btn" class="lightbox-icon-btn" onclick="shareCurrentScreenshot()" title="Copy link" aria-label="Copy link to this file"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.7l6.8-4.4M8.6 13.3l6.8 4.4"/></svg></button>
 					<button type="button" id="lightbox-download-btn" class="lightbox-icon-btn" onclick="downloadCurrentScreenshot()" title="Download" aria-label="Download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button>
 					<span class="lightbox-actions-sep" aria-hidden="true"></span>
 					<button type="button" id="lightbox-delete-btn" class="lightbox-icon-btn danger hidden" onclick="deleteCurrentScreenshot()" title="Delete" aria-label="Delete this file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
@@ -210,6 +211,7 @@
 					</div>
 				</div>
 				<div id="lightbox-loader" class="lightbox-loader hidden" aria-hidden="true"></div>
+				<div id="lightbox-hint" class="lightbox-hint" aria-live="polite"></div>
 			</div>
 
 			<div id="lightbox-thumbs" class="lightbox-thumbs hidden" aria-label="All files"></div>
