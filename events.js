@@ -78,6 +78,7 @@ let currentLightboxShotId = null;
 // ================= INIT =================
 document.addEventListener('DOMContentLoaded', async () => {
     renderEventTypeList();
+    initLightbox();
 
     const client = getSupabase();
     if (client) {
@@ -684,6 +685,7 @@ function selectDuration(id) {
     if (!d) return;
 
     currentDuration = d;
+    currentGalleryFilter = 'all';
 
     document.getElementById('event-duration-page').classList.add('hidden');
     document.getElementById('event-gallery-page').classList.remove('hidden');
@@ -765,10 +767,46 @@ async function loadScreenshots(instanceId) {
     renderScreenshotGrid();
 }
 
+// ---- Gallery filter: All / Images / Documents (tabs only show when a duration has both kinds) ----
+let currentGalleryFilter = 'all';
+
+function getVisibleScreenshots() {
+    if (currentGalleryFilter === 'images') return currentScreenshots.filter(isImageFile);
+    if (currentGalleryFilter === 'documents') return currentScreenshots.filter(s => !isImageFile(s));
+    return currentScreenshots;
+}
+
+function setGalleryFilter(filter) {
+    currentGalleryFilter = filter;
+    renderScreenshotGrid();
+}
+
+function renderScreenshotFilter() {
+    const bar = document.getElementById('screenshot-filter');
+    if (!bar) return;
+
+    const imageCount = currentScreenshots.filter(isImageFile).length;
+    const docCount = currentScreenshots.length - imageCount;
+    const mixed = imageCount > 0 && docCount > 0;
+    if (!mixed) currentGalleryFilter = 'all';
+
+    bar.classList.toggle('hidden', !mixed);
+    const counts = { all: currentScreenshots.length, images: imageCount, documents: docCount };
+    bar.querySelectorAll('.filter-tab').forEach(btn => {
+        const f = btn.dataset.filter;
+        btn.classList.toggle('active', f === currentGalleryFilter);
+        btn.setAttribute('aria-selected', f === currentGalleryFilter ? 'true' : 'false');
+        const countEl = btn.querySelector('.filter-count');
+        if (countEl) countEl.innerText = counts[f];
+    });
+}
+
 function renderScreenshotGrid() {
     const grid = document.getElementById('screenshot-grid');
     const emptyEl = document.getElementById('screenshot-empty');
     if (!grid || !emptyEl) return;
+
+    renderScreenshotFilter();
 
     if (!currentScreenshots.length) {
         grid.innerHTML = '';
@@ -777,7 +815,7 @@ function renderScreenshotGrid() {
     }
     emptyEl.classList.add('hidden');
 
-    grid.innerHTML = currentScreenshots.map(s => {
+    grid.innerHTML = getVisibleScreenshots().map(s => {
         const label = isImageFile(s) ? 'screenshot' : 'file';
         const thumb = isImageFile(s)
             ? `<img src="${escapeHtml(s.image_url)}" loading="lazy" alt="Event report screenshot">`
@@ -972,40 +1010,382 @@ async function handleFileSelect(e) {
     }
 }
 
-function openLightbox(id) {
+// ================= LIGHTBOX (full-screen viewer) =================
+// Features: left/right navigation (buttons, arrow keys, swipe), zoom & pan
+// (wheel, pinch, double-tap/click, +/- keys), thumbnail strip, slide/fade
+// animation + loading spinner, download.
+const LIGHTBOX_MAX_SCALE = 6;
+const LIGHTBOX_DOUBLE_TAP_SCALE = 2.5;
+const LIGHTBOX_SWIPE_MIN_PX = 50;
+
+let lbScale = 1;
+let lbTx = 0;
+let lbTy = 0;
+let lbIsImage = true;
+let lightboxLoadToken = 0;
+let lightboxThumbsKey = '';
+
+function lbEl(id) { return document.getElementById(id); }
+
+function isLightboxOpen() {
+    const m = lbEl('lightbox-modal');
+    return !!m && !m.classList.contains('hidden');
+}
+
+function clampNumber(v, min, max) { return Math.min(max, Math.max(min, v)); }
+
+function applyLightboxTransform(animate) {
+    const img = lbEl('lightbox-image');
+    const stage = lbEl('lightbox-stage');
+    if (!img || !stage) return;
+    img.style.transition = animate
+        ? 'opacity 0.2s ease, transform 0.2s ease'
+        : 'opacity 0.2s ease';
+    img.style.transform = `translate(${lbTx}px, ${lbTy}px) scale(${lbScale})`;
+    stage.classList.toggle('zoomed', lbScale > 1.001);
+}
+
+// Keeps the zoomed image from being dragged completely out of view.
+function clampLightboxPan() {
+    const img = lbEl('lightbox-image');
+    const stage = lbEl('lightbox-stage');
+    const maxX = Math.max(0, (img.offsetWidth * lbScale - stage.clientWidth) / 2);
+    const maxY = Math.max(0, (img.offsetHeight * lbScale - stage.clientHeight) / 2);
+    lbTx = clampNumber(lbTx, -maxX, maxX);
+    lbTy = clampNumber(lbTy, -maxY, maxY);
+}
+
+// Zooms to newScale while keeping the point under (clientX, clientY) fixed.
+function setLightboxScale(newScale, clientX, clientY, animate) {
+    if (!lbIsImage) return;
+    const stage = lbEl('lightbox-stage');
+    const rect = stage.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const px = (clientX == null ? cx : clientX) - cx;
+    const py = (clientY == null ? cy : clientY) - cy;
+
+    newScale = clampNumber(newScale, 1, LIGHTBOX_MAX_SCALE);
+    const ratio = newScale / lbScale;
+    lbTx = px - (px - lbTx) * ratio;
+    lbTy = py - (py - lbTy) * ratio;
+    lbScale = newScale;
+
+    if (lbScale <= 1.001) { lbScale = 1; lbTx = 0; lbTy = 0; }
+    clampLightboxPan();
+    applyLightboxTransform(animate);
+}
+
+function resetLightboxZoom() {
+    lbScale = 1; lbTx = 0; lbTy = 0;
+    applyLightboxTransform(false);
+}
+
+function zoomLightboxBy(factor) {
+    setLightboxScale(lbScale * factor, null, null, true);
+}
+
+function toggleLightboxZoom(clientX, clientY) {
+    if (lbScale > 1.001) setLightboxScale(1, clientX, clientY, true);
+    else setLightboxScale(LIGHTBOX_DOUBLE_TAP_SCALE, clientX, clientY, true);
+}
+
+// The list the lightbox navigates through = what the gallery currently shows
+// (respects the All / Images / Documents filter).
+function getLightboxList() {
+    const visible = getVisibleScreenshots();
+    return visible.some(s => s.id === currentLightboxShotId) ? visible : currentScreenshots;
+}
+
+function openLightbox(id, direction) {
     const shot = currentScreenshots.find(s => s.id === id);
     if (!shot) return;
 
-    currentLightboxShotId = id;
+    const modal = lbEl('lightbox-modal');
+    const imageEl = lbEl('lightbox-image');
+    const filePreviewEl = lbEl('lightbox-file-preview');
+    const loaderEl = lbEl('lightbox-loader');
+    const slideEl = lbEl('lightbox-slide');
+    const wasOpen = isLightboxOpen();
 
-    const imageEl = document.getElementById('lightbox-image');
-    const filePreviewEl = document.getElementById('lightbox-file-preview');
+    currentLightboxShotId = id;
+    resetLightboxZoom();
+    const token = ++lightboxLoadToken;
 
     if (isImageFile(shot)) {
-        imageEl.classList.remove('hidden');
-        imageEl.src = shot.image_url;
+        lbIsImage = true;
         filePreviewEl.classList.add('hidden');
+        imageEl.classList.remove('hidden', 'loaded');
+        loaderEl.classList.remove('hidden');
+        imageEl.onload = () => {
+            if (token !== lightboxLoadToken) return;
+            loaderEl.classList.add('hidden');
+            imageEl.classList.add('loaded');
+        };
+        imageEl.onerror = () => {
+            if (token !== lightboxLoadToken) return;
+            loaderEl.classList.add('hidden');
+            showToast('Failed to load image', 'error');
+        };
+        imageEl.src = shot.image_url;
     } else {
+        lbIsImage = false;
+        imageEl.onload = null;
+        imageEl.onerror = null;
         imageEl.classList.add('hidden');
-        imageEl.src = '';
-        document.getElementById('lightbox-file-icon').innerText = getFileIcon(shot);
-        document.getElementById('lightbox-file-name').innerText = getDisplayFileName(shot);
-        document.getElementById('lightbox-file-open-link').href = shot.image_url;
+        imageEl.classList.remove('loaded');
+        imageEl.removeAttribute('src');
+        loaderEl.classList.add('hidden');
+        lbEl('lightbox-file-icon').innerText = getFileIcon(shot);
+        lbEl('lightbox-file-name').innerText = getDisplayFileName(shot);
+        lbEl('lightbox-file-open-link').href = shot.image_url;
         filePreviewEl.classList.remove('hidden');
     }
 
-    document.getElementById('lightbox-uploaded-at').innerText = `Uploaded: ${formatDateTime(shot.uploaded_at)}`;
-    document.getElementById('lightbox-delete-btn').classList.toggle('hidden', !isAdmin);
-    document.getElementById('lightbox-modal').classList.remove('hidden');
+    // Slide-in animation when moving between files (not on first open).
+    slideEl.classList.remove('slide-next', 'slide-prev');
+    if (wasOpen && direction) {
+        void slideEl.offsetWidth; // restart the CSS animation
+        slideEl.classList.add(direction > 0 ? 'slide-next' : 'slide-prev');
+    }
+
+    lbEl('lightbox-uploaded-at').innerText = `Uploaded: ${formatDateTime(shot.uploaded_at)}`;
+    lbEl('lightbox-zoom-controls').classList.toggle('hidden', !lbIsImage);
+    lbEl('lightbox-delete-btn').classList.toggle('hidden', !isAdmin);
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    updateLightboxNav();
+}
+
+// Moves to the previous (-1) or next (+1) file. Wraps around at the ends.
+function navigateLightbox(direction, e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (currentLightboxShotId == null) return;
+
+    const list = getLightboxList();
+    if (list.length < 2) return;
+    const idx = list.findIndex(s => s.id === currentLightboxShotId);
+    if (idx === -1) return;
+
+    const next = list[(idx + direction + list.length) % list.length];
+    openLightbox(next.id, direction);
+}
+
+function updateLightboxNav() {
+    const list = getLightboxList();
+    const len = list.length;
+    const idx = list.findIndex(s => s.id === currentLightboxShotId);
+    lbEl('lightbox-counter').innerText = `${idx + 1} / ${len}`;
+
+    const showNav = len > 1;
+    lbEl('lightbox-prev-btn').classList.toggle('hidden', !showNav);
+    lbEl('lightbox-next-btn').classList.toggle('hidden', !showNav);
+
+    renderLightboxThumbs(list);
+
+    // Preload neighbouring images so switching feels instant.
+    if (showNav) {
+        [-1, 1].forEach(d => {
+            const s = list[(idx + d + len) % len];
+            if (s && isImageFile(s)) { const img = new Image(); img.src = s.image_url; }
+        });
+    }
+}
+
+function renderLightboxThumbs(list) {
+    const thumbsEl = lbEl('lightbox-thumbs');
+    thumbsEl.classList.toggle('hidden', list.length < 2);
+    if (list.length < 2) { thumbsEl.innerHTML = ''; lightboxThumbsKey = ''; return; }
+
+    const key = list.map(s => s.id).join(',');
+    if (key !== lightboxThumbsKey) {
+        lightboxThumbsKey = key;
+        thumbsEl.innerHTML = list.map((s, i) => {
+            const inner = isImageFile(s)
+                ? `<img src="${escapeHtml(s.image_url)}" alt="" loading="lazy" draggable="false">`
+                : `<span class="lightbox-thumb-icon">${getFileIcon(s)}</span>`;
+            return `<button type="button" class="lightbox-thumb" data-id="${escapeHtml(String(s.id))}" aria-label="Go to file ${i + 1}">${inner}</button>`;
+        }).join('');
+    }
+
+    const activeId = String(currentLightboxShotId);
+    thumbsEl.querySelectorAll('.lightbox-thumb').forEach(btn => {
+        const isActive = btn.dataset.id === activeId;
+        btn.classList.toggle('active', isActive);
+        if (isActive) {
+            const left = btn.offsetLeft - (thumbsEl.clientWidth - btn.offsetWidth) / 2;
+            thumbsEl.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+        }
+    });
 }
 
 function closeLightbox(e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    document.getElementById('lightbox-modal').classList.add('hidden');
-    document.getElementById('lightbox-image').classList.remove('hidden');
-    document.getElementById('lightbox-image').src = '';
-    document.getElementById('lightbox-file-preview').classList.add('hidden');
+    lightboxLoadToken++;
+    const imageEl = lbEl('lightbox-image');
+    lbEl('lightbox-modal').classList.add('hidden');
+    imageEl.onload = null;
+    imageEl.onerror = null;
+    imageEl.classList.remove('hidden', 'loaded');
+    imageEl.removeAttribute('src');
+    lbEl('lightbox-file-preview').classList.add('hidden');
+    lbEl('lightbox-loader').classList.add('hidden');
+    lbEl('lightbox-thumbs').innerHTML = '';
+    lightboxThumbsKey = '';
+    resetLightboxZoom();
+    document.body.style.overflow = '';
     currentLightboxShotId = null;
+}
+
+// Saves the current file to the device. Fetching as a blob makes the browser
+// download it even though the file lives on another domain (Supabase storage);
+// if that is blocked, fall back to opening the file in a new tab.
+async function downloadCurrentScreenshot() {
+    const shot = currentScreenshots.find(s => s.id === currentLightboxShotId);
+    if (!shot) return;
+    try {
+        const res = await fetch(shot.image_url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = getDisplayFileName(shot);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+        console.warn('Direct download failed, opening in a new tab instead', err);
+        window.open(shot.image_url, '_blank', 'noopener');
+    }
+}
+
+// Keyboard + pointer (mouse / touch / pen) handling for the lightbox.
+function initLightbox() {
+    const stage = lbEl('lightbox-stage');
+    if (!stage) return;
+
+    // ----- keyboard -----
+    document.addEventListener('keydown', (e) => {
+        if (!isLightboxOpen()) return;
+        const confirmModal = document.getElementById('confirm-modal');
+        if (confirmModal && !confirmModal.classList.contains('hidden')) return;
+
+        switch (e.key) {
+            case 'ArrowLeft': e.preventDefault(); navigateLightbox(-1); break;
+            case 'ArrowRight': e.preventDefault(); navigateLightbox(1); break;
+            case 'Escape': closeLightbox(); break;
+            case '+': case '=': e.preventDefault(); zoomLightboxBy(1.5); break;
+            case '-': case '_': e.preventDefault(); zoomLightboxBy(1 / 1.5); break;
+            case '0': e.preventDefault(); setLightboxScale(1, null, null, true); break;
+        }
+    });
+
+    // ----- mouse wheel / trackpad zoom -----
+    stage.addEventListener('wheel', (e) => {
+        if (!lbIsImage) return;
+        e.preventDefault();
+        const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
+        setLightboxScale(lbScale * factor, e.clientX, e.clientY, false);
+    }, { passive: false });
+
+    // ----- pointer gestures: drag to pan, pinch to zoom, swipe to navigate,
+    // double tap / double click to zoom, tap on empty area to close -----
+    const pointers = new Map();
+    let drag = null;       // { x, y, tx, ty, time, moved, onImage }
+    let pinch = null;      // { dist, scale }
+    let lastTap = { time: 0, x: 0, y: 0 };
+
+    stage.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('a, button')) return; // let links/buttons work normally
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+        stage.setPointerCapture(e.pointerId);
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size === 1) {
+            drag = {
+                x: e.clientX, y: e.clientY, tx: lbTx, ty: lbTy,
+                time: Date.now(), moved: false,
+                onImage: e.target === lbEl('lightbox-image') || !!e.target.closest('#lightbox-file-preview')
+            };
+        } else if (pointers.size === 2 && lbIsImage) {
+            const [a, b] = [...pointers.values()];
+            pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: lbScale };
+            drag = null;
+        }
+    });
+
+    stage.addEventListener('pointermove', (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+        if (pointers.size === 2 && pinch && pinch.dist > 0) {
+            const [a, b] = [...pointers.values()];
+            const dist = Math.hypot(a.x - b.x, a.y - b.y);
+            setLightboxScale(pinch.scale * dist / pinch.dist, (a.x + b.x) / 2, (a.y + b.y) / 2, false);
+        } else if (pointers.size === 1 && drag) {
+            const dx = e.clientX - drag.x;
+            const dy = e.clientY - drag.y;
+            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) drag.moved = true;
+            if (lbScale > 1.001) {
+                lbTx = drag.tx + dx;
+                lbTy = drag.ty + dy;
+                clampLightboxPan();
+                applyLightboxTransform(false);
+            }
+        }
+    });
+
+    const endPointer = (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        pointers.delete(e.pointerId);
+        try { stage.releasePointerCapture(e.pointerId); } catch (_) { /* already released */ }
+
+        if (e.type === 'pointercancel') { drag = null; pinch = null; return; }
+
+        if (pointers.size === 1) {
+            // Pinch ended with one finger still down: continue as a pan from here.
+            const p = [...pointers.values()][0];
+            drag = { x: p.x, y: p.y, tx: lbTx, ty: lbTy, time: Date.now(), moved: true, onImage: true };
+            pinch = null;
+            return;
+        }
+        if (pointers.size > 0 || !drag) { pinch = null; return; }
+
+        const d = drag;
+        drag = null;
+        pinch = null;
+        const dx = e.clientX - d.x;
+        const dy = e.clientY - d.y;
+
+        // Swipe left/right (touch/pen only, not while zoomed) -> next / previous.
+        if (lbScale <= 1.001 && e.pointerType !== 'mouse' &&
+            Math.abs(dx) >= LIGHTBOX_SWIPE_MIN_PX && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            lastTap.time = 0;
+            navigateLightbox(dx < 0 ? 1 : -1);
+            return;
+        }
+
+        // Tap / click (no real movement)
+        if (!d.moved && Date.now() - d.time < 400) {
+            const now = Date.now();
+            const isDouble = now - lastTap.time < 300 &&
+                Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30;
+            if (isDouble) {
+                lastTap.time = 0;
+                if (lbIsImage) toggleLightboxZoom(e.clientX, e.clientY);
+            } else {
+                lastTap = { time: now, x: e.clientX, y: e.clientY };
+                // A single tap on the empty dark area closes the viewer.
+                if (!d.onImage && lbScale <= 1.001) closeLightbox();
+            }
+        }
+    };
+    stage.addEventListener('pointerup', endPointer);
+    stage.addEventListener('pointercancel', endPointer);
 }
 
 async function deleteCurrentScreenshot() {

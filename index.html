@@ -6,10 +6,10 @@
 		<title>3475 All Event Reports</title>
 		<meta name="description" content="3475 All Event report screenshot archive, organized by event and date range.">
 		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
-		<link rel="stylesheet" href="style.css">
+		<link rel="stylesheet" href="style.css?v=2">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-		<script src="events.js?v=1" defer></script>
+		<script src="events.js?v=2" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -90,6 +90,12 @@
 				<input type="file" id="screenshot-file-input" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z" multiple style="display:none;" onchange="handleFileSelect(event)">
 				<div id="upload-progress-text" class="last-updated-text hidden" style="display:block; text-align:center; margin: 10px 0;"></div>
 				<p class="page-subtitle" style="margin-top: 6px; font-size: 0.75rem;">Images, PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP/RAR/7Z (max 8MB per file, images are auto-compressed)</p>
+
+				<div id="screenshot-filter" class="screenshot-filter hidden" role="tablist" aria-label="Filter files">
+					<button type="button" class="filter-tab active" role="tab" data-filter="all" onclick="setGalleryFilter('all')">All <span class="filter-count">0</span></button>
+					<button type="button" class="filter-tab" role="tab" data-filter="images" onclick="setGalleryFilter('images')">Images <span class="filter-count">0</span></button>
+					<button type="button" class="filter-tab" role="tab" data-filter="documents" onclick="setGalleryFilter('documents')">Documents <span class="filter-count">0</span></button>
+				</div>
 
 				<div class="screenshot-grid" id="screenshot-grid"></div>
 				<p id="screenshot-empty" class="page-subtitle hidden" style="margin-top: 20px;">No files uploaded for this date range yet.</p>
@@ -172,21 +178,41 @@
 			</div>
 		</div>
 
-		<!-- SCREENSHOT LIGHTBOX -->
-		<div id="lightbox-modal" class="modal hidden" onclick="closeLightbox(event)">
-			<div class="lightbox-content" onclick="event.stopPropagation()">
-				<span class="close-modal" onclick="closeLightbox(event)">&times;</span>
-				<img id="lightbox-image" src="" alt="Event report screenshot">
-				<div id="lightbox-file-preview" class="lightbox-file-preview hidden">
-					<div id="lightbox-file-icon" class="lightbox-file-icon">📄</div>
-					<div id="lightbox-file-name" class="lightbox-file-name">file.pdf</div>
-					<a id="lightbox-file-open-link" class="btn-apply" href="#" target="_blank" rel="noopener noreferrer" style="margin-bottom:0; text-decoration:none; display:inline-block;">Open / Download</a>
+		<!-- SCREENSHOT LIGHTBOX (full-screen viewer: zoom, swipe/arrow navigation, thumbnail strip) -->
+		<div id="lightbox-modal" class="modal lightbox-modal hidden" role="dialog" aria-modal="true" aria-label="File viewer">
+			<div class="lightbox-topbar">
+				<div class="lightbox-info">
+					<span id="lightbox-counter" class="lightbox-counter">1 / 1</span>
+					<span id="lightbox-uploaded-at" class="lightbox-date">-</span>
 				</div>
-				<div class="lightbox-meta">
-					<span id="lightbox-uploaded-at">-</span>
-					<button id="lightbox-delete-btn" class="btn-apply btn-danger hidden" onclick="deleteCurrentScreenshot()">Delete Screenshot</button>
+				<div class="lightbox-actions">
+					<div id="lightbox-zoom-controls" class="lightbox-zoom-controls">
+						<button type="button" class="lightbox-icon-btn" onclick="zoomLightboxBy(1 / 1.5)" title="Zoom out (-)" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M8 11h6"/></svg></button>
+						<button type="button" class="lightbox-icon-btn" onclick="zoomLightboxBy(1.5)" title="Zoom in (+)" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5M11 8v6M8 11h6"/></svg></button>
+					</div>
+					<button type="button" id="lightbox-download-btn" class="lightbox-icon-btn" onclick="downloadCurrentScreenshot()" title="Download" aria-label="Download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg></button>
+					<span class="lightbox-actions-sep" aria-hidden="true"></span>
+					<button type="button" id="lightbox-delete-btn" class="lightbox-icon-btn danger hidden" onclick="deleteCurrentScreenshot()" title="Delete" aria-label="Delete this file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+					<button type="button" class="lightbox-icon-btn" onclick="closeLightbox(event)" title="Close (Esc)" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
 				</div>
 			</div>
+
+			<button type="button" id="lightbox-prev-btn" class="lightbox-nav lightbox-nav-prev" onclick="navigateLightbox(-1, event)" aria-label="Previous">&#10094;</button>
+			<button type="button" id="lightbox-next-btn" class="lightbox-nav lightbox-nav-next" onclick="navigateLightbox(1, event)" aria-label="Next">&#10095;</button>
+
+			<div id="lightbox-stage" class="lightbox-stage">
+				<div id="lightbox-slide" class="lightbox-slide">
+					<img id="lightbox-image" src="" alt="Event report screenshot" draggable="false">
+					<div id="lightbox-file-preview" class="lightbox-file-preview hidden">
+						<div id="lightbox-file-icon" class="lightbox-file-icon">📄</div>
+						<div id="lightbox-file-name" class="lightbox-file-name">file.pdf</div>
+						<a id="lightbox-file-open-link" class="btn-apply" href="#" target="_blank" rel="noopener noreferrer" style="margin-bottom:0; text-decoration:none; display:inline-block;">Open / Download</a>
+					</div>
+				</div>
+				<div id="lightbox-loader" class="lightbox-loader hidden" aria-hidden="true"></div>
+			</div>
+
+			<div id="lightbox-thumbs" class="lightbox-thumbs hidden" aria-label="All files"></div>
 		</div>
 
 		<!-- ALLIANCE STAFF LOGIN MODAL (same Supabase Auth used on the main site) -->
