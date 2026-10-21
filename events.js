@@ -455,7 +455,7 @@ async function openHeroPowerSheet(id) {
     currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r})); heroPowerDirty=false;
     document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
     document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
-    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
+    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-full-display')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
     renderHeroPowerRows();
 }
 function closeHeroPowerWorkspace(){ currentHeroPowerSheet=null; document.getElementById('hero-power-workspace').classList.add('hidden'); document.getElementById('hero-power-sheet-list').classList.remove('hidden'); }
@@ -546,6 +546,73 @@ function heroPowerRowsFromMatrix(matrix){
  // Remove duplicate detections caused by merged/duplicated report columns.
  const seen=new Set();return out.filter(r=>{const key=[r.name.toLowerCase(),r.alliance.toLowerCase(),r.hero_power].join('|');if(seen.has(key))return false;seen.add(key);return true;});
 }
+
+async function viewHeroPowerWorkbookFullDisplay(){
+ const client=getSupabase();if(!client)return;
+ try{
+  const {data:authData,error:authError}=await client.auth.getSession();if(authError)throw authError;
+  if(!authData?.session)throw new Error('Please sign in first. Server workbooks require a staff session.');
+  const {data:books,error}=await client.from('spreadsheet_workbooks').select('id,name,workbook,updated_at,created_at').order('updated_at',{ascending:false}).limit(100);if(error)throw error;
+  if(!books?.length){showToast('No saved Spreadsheet Editor workbooks found in Supabase.','warning');return;}
+  const choices=books.map((b,i)=>`${i+1}. ${b.name} — ${new Date(b.updated_at||b.created_at||Date.now()).toLocaleString()}`).join('\n');
+  const answer=prompt('Choose a workbook to view in full (read-only):\n\n'+choices,'1');if(answer===null)return;
+  const bi=Number.parseInt(answer,10)-1;if(!Number.isInteger(bi)||bi<0||bi>=books.length)throw new Error('Invalid workbook selection.');
+  const book=books[bi],payload=typeof book.workbook==='string'?JSON.parse(book.workbook):book.workbook;
+  if(!Array.isArray(payload?.sheets)||!payload.sheets.length)throw new Error('The selected workbook has no readable worksheets.');
+  const colIndex=letters=>{let n=0;for(const ch of letters)n=n*26+ch.charCodeAt(0)-64;return n-1;};
+  const colName=n=>{let out='';n++;while(n){const r=(n-1)%26;out=String.fromCharCode(65+r)+out;n=Math.floor((n-1)/26);}return out;};
+  const content=document.getElementById('hero-power-full-display-content');
+  content.innerHTML=payload.sheets.map((sh,si)=>{
+   const cells=(sh.model||{}).cells||{},model=new SheetEngine.Model(sh.model||{}),entries=[];let maxRow=0,maxCol=0;
+   for(const [addr,cell] of Object.entries(cells)){const m=/^([A-Z]+)(\d+)$/i.exec(addr);if(!m)continue;const r=Number(m[2])-1,c=colIndex(m[1].toUpperCase());if(r<0||c<0)continue;maxRow=Math.max(maxRow,r);maxCol=Math.max(maxCol,c);entries.push([r,c,model.getValue(c,r),cell]);}
+   if(!entries.length)return `<section class="hero-power-full-sheet"><h3>${escapeHtml(sh.name||`Sheet ${si+1}`)}</h3><p class="page-subtitle">Empty worksheet</p></section>`;
+   const matrix=Array.from({length:maxRow+1},()=>Array(maxCol+1).fill(''));
+   for(const [r,c,v] of entries)matrix[r][c]=v==null?'':v;
+   let html=`<section class="hero-power-full-sheet" style="margin:18px 0 28px;"><h3>${escapeHtml(sh.name||`Sheet ${si+1}`)}</h3><div style="overflow:auto;max-height:60vh;border:1px solid var(--border-color,#343844);border-radius:8px;"><table class="hero-power-table" style="min-width:max-content;width:100%;"><thead><tr><th style="position:sticky;left:0;z-index:2;">#</th>`;
+   for(let c=0;c<=maxCol;c++)html+=`<th>${colName(c)}</th>`;
+   html+='</tr></thead><tbody>';
+   for(let r=0;r<=maxRow;r++){html+=`<tr><th style="position:sticky;left:0;">${r+1}</th>`;for(let c=0;c<=maxCol;c++){const v=matrix[r][c];html+=`<td style="white-space:pre-wrap;min-width:72px;max-width:260px;">${escapeHtml(String(v??''))}</td>`;}html+='</tr>';}
+   html+='</tbody></table></div></section>';return html;
+  }).join('');
+  document.getElementById('hero-power-full-display-meta').textContent=`${book.name} · ${payload.sheets.length} worksheet(s) · Read-only · Loaded from Supabase`;
+  document.getElementById('hero-power-full-display-modal').classList.remove('hidden');
+ }catch(err){console.error('Could not display full server workbook:',err);showToast(`Could not load workbook from Supabase: ${err?.message||err}`,'error');}
+}
+function closeHeroPowerFullDisplay(){document.getElementById('hero-power-full-display-modal')?.classList.add('hidden');}
+
+async function chooseHeroPowerWorkbookFromServer(){
+ if(!isAdmin||!currentHeroPowerSheet)return;
+ const client=getSupabase();if(!client)return;
+ try{
+  const {data:authData,error:authError}=await client.auth.getSession();
+  if(authError)throw authError;
+  if(!authData?.session)throw new Error('Please sign in first. Server workbooks require a staff session.');
+  const {data:books,error}=await client.from('spreadsheet_workbooks').select('id,name,workbook,updated_at,created_at').order('updated_at',{ascending:false}).limit(100);
+  if(error)throw error;
+  if(!books?.length){showToast('No saved Spreadsheet Editor workbooks found in Supabase. Save a workbook to the server first.','warning');return;}
+  const bookChoices=books.map((b,i)=>`${i+1}. ${b.name} — ${new Date(b.updated_at||b.created_at||Date.now()).toLocaleString()}`).join('\n');
+  const bookAnswer=prompt('Choose a workbook saved on Supabase:\n\n'+bookChoices,'1');
+  if(bookAnswer===null)return;
+  const bi=Number.parseInt(bookAnswer,10)-1;if(!Number.isInteger(bi)||bi<0||bi>=books.length)throw new Error('Invalid workbook selection.');
+  const book=books[bi],payload=typeof book.workbook==='string'?JSON.parse(book.workbook):book.workbook;
+  if(!Array.isArray(payload?.sheets)||!payload.sheets.length)throw new Error('The selected server workbook has no readable sheets.');
+  const sheetChoices=payload.sheets.map((sh,i)=>`${i+1}. ${sh.name||`Sheet${i+1}`}`).join('\n');
+  const sheetAnswer=prompt(`Choose a worksheet from “${book.name}” (loaded from Supabase):\n\n${sheetChoices}`,'1');
+  if(sheetAnswer===null)return;
+  const si=Number.parseInt(sheetAnswer,10)-1;if(!Number.isInteger(si)||si<0||si>=payload.sheets.length)throw new Error('Invalid worksheet selection.');
+  const selected=payload.sheets[si],model=new SheetEngine.Model(selected.model||{}),cells=(selected.model||{}).cells||{};
+  const colIndex=letters=>{let n=0;for(const ch of letters)n=n*26+ch.charCodeAt(0)-64;return n-1;};
+  let maxRow=0,maxCol=0;const entries=[];
+  for(const [addr,cell] of Object.entries(cells)){const m=/^([A-Z]+)(\d+)$/i.exec(addr);if(!m)continue;const r=Number(m[2])-1,c=colIndex(m[1].toUpperCase());if(r<0||c<0)continue;maxRow=Math.max(maxRow,r);maxCol=Math.max(maxCol,c);entries.push([r,c,model.getValue(c,r)]);}
+  const matrix=Array.from({length:maxRow+1},()=>Array(maxCol+1).fill(''));
+  for(const [r,c,v] of entries)matrix[r][c]=v==null?'':v;
+  pendingHeroPowerImport=heroPowerRowsFromMatrix(matrix);
+  if(!pendingHeroPowerImport.length)throw new Error(`No player rows with Name and Hero Power were detected in worksheet “${selected.name}”. Choose the worksheet containing player records.`);
+  document.getElementById('hero-power-import-preview').innerHTML=`<p><b>Source:</b> ${escapeHtml(book.name)} → <b>${escapeHtml(selected.name)}</b> (Supabase server workbook)</p><p><b>${pendingHeroPowerImport.length}</b> player rows detected. Applying replaces the current Hero Power rows.</p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
+  document.getElementById('hero-power-import-modal').classList.remove('hidden');
+ }catch(err){console.error('Could not load server workbook for Hero Power:',err);showToast(`Could not load workbook from Supabase: ${err?.message||err}`,'error');}
+}
+
 async function handleHeroPowerImportFile(event){
  if(!isAdmin||!currentHeroPowerSheet)return; const file=event.target.files?.[0];event.target.value='';if(!file)return;
  try{
