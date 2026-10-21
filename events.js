@@ -78,6 +78,7 @@ let currentLightboxShotId = null;
 let currentHeroPowerSheets = [];
 let currentHeroPowerSheet = null;
 let pendingHeroPowerImport = [];
+let pendingHeroPowerSource = null;
 let currentHeroPowerRows = [];
 let heroPowerDirty = false;
 
@@ -525,7 +526,7 @@ function heroPowerRowsFromMatrix(matrix){
    for(const g of groups){const name=String(row[g.ni]??'').trim();const power=heroPowerParseNumber(row[g.pi]);if(!name||!Number.isFinite(power)||power<0)continue;
     // Skip repeated header lines and aggregate labels that can appear in report exports.
     if(nameAliases.includes(heroPowerNormalizeHeader(name))||['total','alliance','hero power'].includes(heroPowerNormalizeHeader(name)))continue;
-    out.push({name,alliance:g.ai>=0?String(row[g.ai]??'').trim():'',hero_power:power});
+    out.push({name,alliance:g.ai>=0?String(row[g.ai]??'').trim():'',hero_power:power,_source_row:ri+1,_source_name_col:g.ni,_source_alliance_col:g.ai,_source_power_col:g.pi});
    }
   }
  }
@@ -539,7 +540,7 @@ function heroPowerRowsFromMatrix(matrix){
     let pi=-1,power=NaN;for(let j=ni+1;j<Math.min(row.length,ni+4);j++){const n=heroPowerParseNumber(row[j]);if(Number.isFinite(n)&&n>=0){pi=j;power=n;break;}}
     if(pi<0)continue;
     const alliance=ni+1<pi?String(row[ni+1]??'').trim():'';
-    out.push({name,alliance,hero_power:power});
+    out.push({name,alliance,hero_power:power,_source_row:matrix.indexOf(row)+1,_source_name_col:ni,_source_alliance_col:ni+1,_source_power_col:pi});
    }
   }
  }
@@ -601,6 +602,7 @@ async function chooseHeroPowerWorkbookFromServer(){
   if(sheetAnswer===null)return;
   const si=Number.parseInt(sheetAnswer,10)-1;if(!Number.isInteger(si)||si<0||si>=payload.sheets.length)throw new Error('Invalid worksheet selection.');
   const selected=payload.sheets[si],model=new SheetEngine.Model(selected.model||{}),cells=(selected.model||{}).cells||{};
+  pendingHeroPowerSource={workbookId:book.id,workbookName:book.name,worksheetName:selected.name,updatedAt:book.updated_at||null};
   const colIndex=letters=>{let n=0;for(const ch of letters)n=n*26+ch.charCodeAt(0)-64;return n-1;};
   let maxRow=0,maxCol=0;const entries=[];
   for(const [addr,cell] of Object.entries(cells)){const m=/^([A-Z]+)(\d+)$/i.exec(addr);if(!m)continue;const r=Number(m[2])-1,c=colIndex(m[1].toUpperCase());if(r<0||c<0)continue;maxRow=Math.max(maxRow,r);maxCol=Math.max(maxCol,c);entries.push([r,c,model.getValue(c,r)]);}
@@ -637,12 +639,39 @@ async function handleHeroPowerImportFile(event){
 }
 
 function closeHeroPowerImportPreview(){document.getElementById('hero-power-import-modal').classList.add('hidden');pendingHeroPowerImport=[];}
-function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHeroPowerImport.length)return;currentHeroPowerRows=pendingHeroPowerImport.map(r=>({...r}));heroPowerDirty=true;closeHeroPowerImportPreview();renderHeroPowerRows();showToast('Import preview applied. Click Save Changes to store it.','success');}
+function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHeroPowerImport.length)return;currentHeroPowerRows=pendingHeroPowerImport.map(r=>({...r}));if(pendingHeroPowerSource){currentHeroPowerSheet.source_workbook_id=pendingHeroPowerSource.workbookId;currentHeroPowerSheet.source_worksheet_name=pendingHeroPowerSource.worksheetName;currentHeroPowerSheet.source_workbook_name=pendingHeroPowerSource.workbookName;}heroPowerDirty=true;closeHeroPowerImportPreview();renderHeroPowerRows();showToast(pendingHeroPowerSource?'Live workbook linked. Save Changes will write player cells back to the source workbook; formulas and other cells are preserved.':'Import preview applied. Click Save Changes to store it.','success');}
 
+function heroPowerColumnName(index){let n=index+1,out='';while(n){const r=(n-1)%26;out=String.fromCharCode(65+r)+out;n=Math.floor((n-1)/26);}return out;}
+async function syncHeroPowerRowsToLiveWorkbook(client, sheetId, rows, previousRows){
+ const sheet=currentHeroPowerSheet;
+ if(!sheet?.source_workbook_id||!sheet?.source_worksheet_name)return;
+ const {data:book,error}=await client.from('spreadsheet_workbooks').select('id,name,workbook,updated_at').eq('id',sheet.source_workbook_id).single();
+ if(error)throw new Error('Could not load linked source workbook: '+error.message);
+ const payload=typeof book.workbook==='string'?JSON.parse(book.workbook):JSON.parse(JSON.stringify(book.workbook||{}));
+ if(!Array.isArray(payload.sheets))throw new Error('Linked source workbook has no worksheets.');
+ const sh=payload.sheets.find(x=>String(x.name)===String(sheet.source_worksheet_name));
+ if(!sh)throw new Error(`Linked worksheet “${sheet.source_worksheet_name}” no longer exists in the source workbook.`);
+ sh.model=sh.model||{};sh.model.cells=sh.model.cells||{};const cells=sh.model.cells;
+ const setCell=(addr,value)=>{if(value===null||value===undefined||value==='')delete cells[addr];else cells[addr]={...(cells[addr]||{}),v:value,f:undefined};if(cells[addr]&&cells[addr].f===undefined)delete cells[addr].f;};
+ // Update only the three mapped player-data cells. Every other cell, formula,
+ // worksheet, formatting field, and workbook setting remains untouched.
+ for(const old of previousRows||[]){if(old._source_row&&!(rows||[]).some(r=>Number(r._source_row)===Number(old._source_row))){
+   for(const col of [old._source_name_col,old._source_alliance_col,old._source_power_col])if(Number.isInteger(col)&&col>=0)setCell(heroPowerColumnName(col)+old._source_row,null);
+ }}
+ for(const row of rows||[]){if(!row._source_row)continue;const r=Number(row._source_row);if(!Number.isInteger(r)||r<1)continue;
+   if(Number.isInteger(row._source_name_col))setCell(heroPowerColumnName(row._source_name_col)+r,String(row.name||''));
+   if(Number.isInteger(row._source_alliance_col)&&row._source_alliance_col>=0)setCell(heroPowerColumnName(row._source_alliance_col)+r,String(row.alliance||''));
+   if(Number.isInteger(row._source_power_col))setCell(heroPowerColumnName(row._source_power_col)+r,Number(row.hero_power)||0);
+ }
+ payload.updatedAt=new Date().toISOString();
+ const {error:updateError}=await client.from('spreadsheet_workbooks').update({workbook:payload,updated_at:new Date().toISOString()}).eq('id',book.id);
+ if(updateError)throw new Error('Hero Power rows were saved, but live workbook sync failed: '+updateError.message);
+}
 async function saveHeroPowerRows(){
  if(!isAdmin||!currentHeroPowerSheet)return;
  const client=getSupabase();
  const sheetId=currentHeroPowerSheet.id;
+ const previousRows=(currentHeroPowerRows||[]).map(r=>({...r}));
  const rows=currentHeroPowerRows
   .filter(r=>String(r.name||'').trim())
   .map((r,i)=>({ ...r, sheet_id:sheetId, name:String(r.name).trim(), alliance:(r.alliance||'').trim()||null, hero_power:Math.max(0,Number(r.hero_power)||0), sort_order:i }));
@@ -653,16 +682,17 @@ async function saveHeroPowerRows(){
  const {error:delError}=await query;
  if(delError){showToast('Could not save rows (delete step failed)','error');return;}
  for(const row of rows){
-  const payload={sheet_id:sheetId,name:row.name,alliance:row.alliance,hero_power:row.hero_power,sort_order:row.sort_order};
+  const payload={sheet_id:sheetId,name:row.name,alliance:row.alliance,hero_power:row.hero_power,sort_order:row.sort_order,source_row:row._source_row??null,source_name_col:row._source_name_col??null,source_alliance_col:row._source_alliance_col??null,source_power_col:row._source_power_col??null};
   const result=row.id
    ? await client.from('hero_power_entries').update(payload).eq('id',row.id).eq('sheet_id',sheetId)
    : await client.from('hero_power_entries').insert(payload).select().single();
   if(result.error){showToast('Could not save Hero Power rows','error');return;}
   if(!row.id&&result.data) row.id=result.data.id;
  }
+ try{if(currentHeroPowerSheet.source_workbook_id){const {error:linkError}=await client.from('hero_power_sheets').update({source_workbook_id:currentHeroPowerSheet.source_workbook_id,source_worksheet_name:currentHeroPowerSheet.source_worksheet_name}).eq('id',sheetId);if(linkError)throw new Error('Could not save live workbook link: '+linkError.message);}await syncHeroPowerRowsToLiveWorkbook(client,sheetId,rows,previousRows);}catch(syncErr){showToast(syncErr.message||'Could not sync live workbook','error');return;}
  currentHeroPowerRows=rows;
  heroPowerDirty=false;
- showToast('Hero Power sheet saved to Supabase','success');
+ showToast(currentHeroPowerSheet.source_workbook_id?'Hero Power saved and synced to the live Supabase workbook. Formulas and other workbook cells were preserved.':'Hero Power sheet saved to Supabase','success');
  await openHeroPowerSheet(sheetId);
 }
 

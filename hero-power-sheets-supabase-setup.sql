@@ -44,3 +44,11 @@ create policy hero_power_entries_staff_update on public.hero_power_entries
 drop policy if exists hero_power_entries_staff_delete on public.hero_power_entries;
 create policy hero_power_entries_staff_delete on public.hero_power_entries
   for delete to authenticated using (true);
+
+-- Live workbook linkage: records which Supabase workbook/sheet is the source.
+alter table public.hero_power_sheets add column if not exists source_workbook_id uuid references public.spreadsheet_workbooks(id) on delete set null;
+alter table public.hero_power_sheets add column if not exists source_worksheet_name text;
+alter table public.hero_power_entries add column if not exists source_row integer;
+alter table public.hero_power_entries add column if not exists source_name_col integer;
+alter table public.hero_power_entries add column if not exists source_alliance_col integer;
+alter table public.hero_power_entries add column if not exists source_power_col integer;

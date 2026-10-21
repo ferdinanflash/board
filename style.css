@@ -1332,3 +1332,41 @@ th.sortable:hover { color: #f1f5f9; }
     .spreadsheet-footer-actions .btn-back { width:100%; min-width:0; padding:8px 5px; font-size:.72rem; white-space:normal; line-height:1.2; }
     .spreadsheet-help { font-size:.68rem; margin-top:6px; }
 }
+
+
+/* Mobile spreadsheet editor compact layout (V7) */
+@media (max-width:650px) {
+  .spreadsheet-editor-content {
+    display:flex; flex-direction:column; gap:0;
+    height:100dvh; max-height:100dvh; min-height:0;
+    padding:8px; overflow:hidden; box-sizing:border-box;
+  }
+  .spreadsheet-editor-heading { gap:6px; margin-bottom:4px; }
+  .spreadsheet-editor-heading .modal-title { font-size:1rem; margin-bottom:2px; }
+  .spreadsheet-editor-heading .page-subtitle { font-size:.68rem; line-height:1.2; max-width:none; }
+  .spreadsheet-editor-heading .close-modal { font-size:24px; padding:0 6px; }
+  .spreadsheet-toolbar {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:5px; margin:6px 0; flex:0 0 auto;
+  }
+  .spreadsheet-file-button { grid-column:1 / -1; min-height:34px; padding:6px; font-size:.75rem; }
+  .spreadsheet-workbook-title { grid-column:1 / -1; min-height:34px; padding:6px 8px; }
+  .spreadsheet-toolbar .btn-apply,
+  .spreadsheet-toolbar .btn-back { min-height:34px; padding:6px 5px; font-size:.72rem; }
+  .spreadsheet-status { grid-column:1 / -1; font-size:.64rem; line-height:1.15; padding:0; }
+  .spreadsheet-formula-row { grid-template-columns:48px 15px minmax(0,1fr) auto; gap:4px; margin:0 0 6px; flex:0 0 auto; }
+  #spreadsheet-name-box { width:48px; min-width:0; padding:6px 2px; font-size:.72rem; }
+  .spreadsheet-fx { font-size:.85rem; }
+  .spreadsheet-formula-row input { padding:6px 5px; font-size:.72rem; }
+  .spreadsheet-formula-row .btn-apply { padding:6px 7px; font-size:.7rem; }
+  .spreadsheet-grid-wrap { flex:1 1 0; min-height:0; height:auto; overflow:auto; }
+  .spreadsheet-grid-table th { min-width:82px; width:82px; height:25px; padding:3px 5px; }
+  .spreadsheet-grid-table td { min-width:82px; width:82px; height:26px; }
+  .spreadsheet-cell { height:25px; padding:3px 5px; font-size:11px; }
+  .spreadsheet-editor-footer { margin-top:6px; gap:5px; flex:0 0 auto; min-height:0; }
+  .spreadsheet-tabs { gap:4px; padding-bottom:1px; }
+  .spreadsheet-tab { padding:6px 9px; font-size:.72rem; }
+  .spreadsheet-footer-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+  .spreadsheet-footer-actions .btn-back { min-height:31px; padding:5px 3px; font-size:.65rem; line-height:1.1; }
+  .spreadsheet-help { margin-top:4px; font-size:.61rem; line-height:1.15; flex:0 0 auto; }
+}
