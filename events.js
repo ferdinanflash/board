@@ -500,7 +500,7 @@ function heroPowerParseNumber(value){
  return /^\d+(\.\d+)?$/.test(s)?Number(s):NaN;
 }
 function heroPowerRowsFromMatrix(matrix){
- const nameAliases=['name','playername','player','username','playerid'];
+ const nameAliases=['name','name1','name2','playername','player','username','playerid'];
  const allianceAliases=['alliance','alliancecode','alliance tag','tag','guild','team'];
  const powerAliases=['heropower','power','totalheropower','playerpower','hero power'];
  // Search the first 50 rows for a header row; exports converted from PDF often
@@ -526,7 +526,7 @@ function heroPowerRowsFromMatrix(matrix){
    for(const g of groups){const name=String(row[g.ni]??'').trim();const power=heroPowerParseNumber(row[g.pi]);if(!name||!Number.isFinite(power)||power<0)continue;
     // Skip repeated header lines and aggregate labels that can appear in report exports.
     if(nameAliases.includes(heroPowerNormalizeHeader(name))||['total','alliance','hero power'].includes(heroPowerNormalizeHeader(name)))continue;
-    out.push({name,alliance:g.ai>=0?String(row[g.ai]??'').trim():'',hero_power:power,_source_row:ri+1,_source_name_col:g.ni,_source_alliance_col:g.ai,_source_power_col:g.pi});
+    out.push({name,alliance:g.ai>=0?String(row[g.ai]??'').trim():'',hero_power:power,_source_row:ri+1,_source_name_col:g.ni,_source_name_label:String((matrix[headerRow]||[])[g.ni]??'Name').trim()||'Name',_source_alliance_col:g.ai,_source_power_col:g.pi});
    }
   }
  }
@@ -610,7 +610,7 @@ async function chooseHeroPowerWorkbookFromServer(){
   for(const [r,c,v] of entries)matrix[r][c]=v==null?'':v;
   pendingHeroPowerImport=heroPowerRowsFromMatrix(matrix);
   if(!pendingHeroPowerImport.length)throw new Error(`No player rows with Name and Hero Power were detected in worksheet “${selected.name}”. Choose the worksheet containing player records.`);
-  document.getElementById('hero-power-import-preview').innerHTML=`<p><b>Source:</b> ${escapeHtml(book.name)} → <b>${escapeHtml(selected.name)}</b> (Supabase server workbook)</p><p><b>${pendingHeroPowerImport.length}</b> player rows detected. Applying replaces the current Hero Power rows.</p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
+  document.getElementById('hero-power-import-preview').innerHTML=`<p><b>Source:</b> ${escapeHtml(book.name)} → <b>${escapeHtml(selected.name)}</b> (Supabase server workbook)</p><p><b>${pendingHeroPowerImport.length}</b> player rows detected. Applying replaces the current Hero Power rows.</p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name (Name#1 / Name#2)</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}${r._source_name_label?` <small style="opacity:.7">(${escapeHtml(r._source_name_label)})</small>`:''}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
   document.getElementById('hero-power-import-modal').classList.remove('hidden');
  }catch(err){console.error('Could not load server workbook for Hero Power:',err);showToast(`Could not load workbook from Supabase: ${err?.message||err}`,'error');}
 }
@@ -633,7 +633,7 @@ async function handleHeroPowerImportFile(event){
    pendingHeroPowerImport=heroPowerRowsFromMatrix(matrix);
   }
   if(!pendingHeroPowerImport.length)throw new Error('No player rows were detected in this Excel file. Make sure a worksheet contains player names and numeric Hero Power values.');
-  document.getElementById('hero-power-import-preview').innerHTML=`<p><b>${pendingHeroPowerImport.length}</b> player rows detected from <b>${escapeHtml(file.name)}</b></p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
+  document.getElementById('hero-power-import-preview').innerHTML=`<p><b>${pendingHeroPowerImport.length}</b> player rows detected from <b>${escapeHtml(file.name)}</b></p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name (Name#1 / Name#2)</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}${r._source_name_label?` <small style="opacity:.7">(${escapeHtml(r._source_name_label)})</small>`:''}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
   document.getElementById('hero-power-import-modal').classList.remove('hidden');
  }catch(err){showToast(err.message||'Could not read this file','error');}
 }
