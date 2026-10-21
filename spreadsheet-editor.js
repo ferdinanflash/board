@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   const $ = id => document.getElementById(id);
-  const COLS = 26, ROWS = 60;
+  const COLS = 12, ROWS = 30;
   let visibleCols = COLS, visibleRows = ROWS;
   let workbookSheets = [], activeSheet = 0, selected = { c: 0, r: 0 }, dirty = false;
   let renderQueued = false;
@@ -53,7 +53,7 @@
     html += '</tbody></table>';
     el.innerHTML = html;
     const status = $('spreadsheet-status'); if (status && !dirty) status.textContent = `${Object.keys(m.cells).length} populated cells · ${workbookSheets.length} sheet${workbookSheets.length === 1 ? '' : 's'}`;
-    $('spreadsheet-dimensions').textContent = `Showing ${rows} rows × ${cols} columns (up to 300 rows / 78 columns visible at once)`;
+    $('spreadsheet-dimensions').textContent = `Showing ${rows} rows × ${cols} columns · use “Show More” to expand`;
   }
   function updateFormulaBar() {
     const a = addr(selected.c, selected.r), m = current().model, cell = m.getCell(a);

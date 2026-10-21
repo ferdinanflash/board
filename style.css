@@ -1264,42 +1264,62 @@ th.sortable:hover { color: #f1f5f9; }
 .hero-power-alliance-totals strong { color:#f8fafc; margin-left:5px; }
 @media(max-width:600px){ .hero-power-workspace-head .schedule-actions-buttons { width:100%; } .hero-power-workspace-head .schedule-actions-buttons button { flex:1; } }
 
-/* XLSX-like spreadsheet editor */
-.spreadsheet-editor-modal { z-index: 1200; padding: 10px; }
-.spreadsheet-editor-content { width: min(1500px, 99vw); max-width: 1500px; height: min(94vh, 1000px); max-height: 94vh; padding: 16px; display: flex; flex-direction: column; overflow: hidden; }
-.spreadsheet-editor-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-shrink:0; }
-.spreadsheet-editor-heading .modal-title { margin: 0 0 4px; }
-.spreadsheet-editor-heading .close-modal { position: static; flex-shrink:0; font-size:28px; line-height:1; }
-.spreadsheet-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; flex-shrink:0; }
-.spreadsheet-file-button { display:inline-flex; align-items:center; justify-content:center; border-radius:8px; padding:10px 13px; color:#fff; background:#2563eb; font-size:.85rem; font-weight:600; cursor:pointer; }
+/* XLSX-like spreadsheet editor — responsive layout */
+.spreadsheet-editor-modal { z-index: 2200; padding: 12px; }
+.spreadsheet-editor-content {
+    width: min(1480px, calc(100vw - 24px)); max-width: 1480px;
+    height: min(920px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px);
+    padding: 16px; display: flex; flex-direction: column; gap: 0; overflow: hidden;
+    border: 1px solid #343b4a; border-radius: 12px; min-height: 0;
+}
+.spreadsheet-editor-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex:0 0 auto; }
+.spreadsheet-editor-heading > div { min-width:0; }
+.spreadsheet-editor-heading .modal-title { margin:0 0 4px; font-size:1.25rem; }
+.spreadsheet-editor-heading .page-subtitle { margin:0; line-height:1.4; }
+.spreadsheet-editor-heading .close-modal { position:static; flex:0 0 auto; font-size:28px; line-height:1; padding:2px 7px; }
+.spreadsheet-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0 10px; flex:0 0 auto; }
+.spreadsheet-toolbar .btn-back { margin:0; white-space:nowrap; }
+.spreadsheet-file-button { display:inline-flex; align-items:center; justify-content:center; border-radius:8px; padding:10px 13px; color:#fff; background:#2563eb; font-size:.85rem; font-weight:600; cursor:pointer; white-space:nowrap; }
 .spreadsheet-status { color:#9ca3af; font-size:.78rem; margin-left:auto; }
-.spreadsheet-formula-row { display:flex; gap:7px; align-items:center; margin-bottom:9px; flex-shrink:0; }
+.spreadsheet-formula-row { display:flex; gap:7px; align-items:center; margin-bottom:10px; flex:0 0 auto; min-width:0; }
 .spreadsheet-formula-row input { min-width:0; padding:9px 10px; color:#f8fafc; background:#171a22; border:1px solid #343846; border-radius:6px; }
-#spreadsheet-name-box { width:76px; text-align:center; font-weight:700; }
-.spreadsheet-fx { color:#94a3b8; font-weight:700; font-style:italic; }
-#spreadsheet-formula-input { flex:1; }
-.spreadsheet-grid-wrap { flex:1; min-height:180px; overflow:auto; border:1px solid #343846; border-radius:7px; background:#15171d; }
+#spreadsheet-name-box { flex:0 0 76px; width:76px; text-align:center; font-weight:700; }
+.spreadsheet-fx { flex:0 0 auto; color:#94a3b8; font-weight:700; font-style:italic; }
+#spreadsheet-formula-input { flex:1 1 auto; width:100%; }
+.spreadsheet-formula-row .btn-apply { flex:0 0 auto; white-space:nowrap; margin:0; }
+.spreadsheet-grid-wrap { flex:1 1 auto; min-height:120px; min-width:0; overflow:auto; overscroll-behavior:contain; border:1px solid #343846; border-radius:7px; background:#15171d; }
+.spreadsheet-grid { min-width:100%; }
 .spreadsheet-grid-table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; table-layout:fixed; font-size:12px; }
-.spreadsheet-grid-table th { position:sticky; top:0; z-index:2; height:27px; min-width:100px; max-width:220px; padding:4px 8px; text-align:center; color:#cbd5e1; background:#242936; border-right:1px solid #353a48; border-bottom:1px solid #3a4050; font-weight:600; }
-.spreadsheet-grid-table th.spreadsheet-corner { left:0; z-index:4; min-width:42px; width:42px; }
-.spreadsheet-grid-table th.spreadsheet-row-head { position:sticky; left:0; z-index:1; min-width:42px; width:42px; background:#242936; }
-.spreadsheet-grid-table td { padding:0; min-width:100px; width:100px; max-width:220px; height:28px; border-right:1px solid #2b2f39; border-bottom:1px solid #2b2f39; }
-.spreadsheet-cell { display:block; width:100%; height:28px; padding:4px 7px; border:0; border-radius:0; outline:0; color:#e5e7eb; background:#191c24; font:inherit; white-space:nowrap; overflow:hidden; text-overflow:clip; }
+.spreadsheet-grid-table th { position:sticky; top:0; z-index:2; height:28px; min-width:100px; width:100px; max-width:220px; padding:4px 8px; text-align:center; color:#cbd5e1; background:#242936; border-right:1px solid #353a48; border-bottom:1px solid #3a4050; font-weight:600; }
+.spreadsheet-grid-table th.spreadsheet-corner { left:0; z-index:4; min-width:42px; width:42px; max-width:42px; }
+.spreadsheet-grid-table th.spreadsheet-row-head { position:sticky; left:0; z-index:1; min-width:42px; width:42px; max-width:42px; background:#242936; }
+.spreadsheet-grid-table td { padding:0; min-width:100px; width:100px; max-width:220px; height:29px; border-right:1px solid #2b2f39; border-bottom:1px solid #2b2f39; }
+.spreadsheet-cell { display:block; box-sizing:border-box; width:100%; height:28px; margin:0; padding:4px 7px; border:0; border-radius:0; outline:0; color:#e5e7eb; background:#191c24; font:inherit; white-space:nowrap; overflow:hidden; text-overflow:clip; }
 .spreadsheet-cell:focus, .spreadsheet-cell.selected { outline:2px solid #60a5fa; outline-offset:-2px; background:#202a3a; position:relative; z-index:1; }
-.spreadsheet-editor-footer { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:10px; flex-shrink:0; }
-.spreadsheet-tabs { display:flex; gap:5px; flex-wrap:wrap; }
-.spreadsheet-tab { border:1px solid #3b4252; background:#222631; color:#cbd5e1; border-radius:6px 6px 0 0; padding:8px 12px; cursor:pointer; }
+.spreadsheet-editor-footer { display:flex; flex-direction:column; align-items:stretch; gap:8px; margin-top:10px; flex:0 0 auto; min-width:0; }
+.spreadsheet-tabs { display:flex; gap:5px; flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; }
+.spreadsheet-tab { flex:0 0 auto; border:1px solid #3b4252; background:#222631; color:#cbd5e1; border-radius:6px 6px 0 0; padding:8px 12px; cursor:pointer; white-space:nowrap; }
 .spreadsheet-tab.active { background:#1d4ed8; border-color:#3b82f6; color:#fff; }
 .spreadsheet-footer-actions { display:flex; flex-wrap:wrap; gap:6px; }
-.spreadsheet-footer-actions .btn-back { padding:7px 9px; font-size:.75rem; }
-.spreadsheet-help { color:#9ca3af; font-size:.75rem; margin:8px 0 0; flex-shrink:0; }
+.spreadsheet-footer-actions .btn-back { margin:0; padding:7px 10px; font-size:.78rem; white-space:nowrap; }
+.spreadsheet-help { color:#9ca3af; font-size:.75rem; line-height:1.4; margin:8px 0 0; flex:0 0 auto; }
 @media(max-width:650px) {
- .spreadsheet-editor-modal { padding:0; }
- .spreadsheet-editor-content { width:100vw; height:100dvh; max-height:100dvh; border-radius:0; padding:10px; }
- .spreadsheet-toolbar .btn-back, .spreadsheet-file-button { flex:1; font-size:.76rem; padding:9px 7px; }
- .spreadsheet-status { width:100%; margin-left:0; }
- .spreadsheet-formula-row { gap:4px; }
- .spreadsheet-formula-row input { padding:8px 6px; font-size:.8rem; }
- .spreadsheet-footer-actions { width:100%; }
- .spreadsheet-footer-actions .btn-back { flex:1; }
+    .spreadsheet-editor-modal { padding:0; align-items:stretch; }
+    .spreadsheet-editor-content { width:100%; height:100dvh; max-height:100dvh; max-width:none; border:0; border-radius:0; padding:10px; }
+    .spreadsheet-editor-heading .modal-title { font-size:1.05rem; }
+    .spreadsheet-editor-heading .page-subtitle { font-size:.72rem; max-width:280px; }
+    .spreadsheet-toolbar { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:9px 0; }
+    .spreadsheet-toolbar .btn-back, .spreadsheet-file-button { width:100%; min-width:0; min-height:38px; margin:0; padding:8px 5px; font-size:.75rem; }
+    .spreadsheet-status { grid-column:1 / -1; margin:0; padding:2px 1px; font-size:.7rem; }
+    .spreadsheet-formula-row { display:grid; grid-template-columns:58px 18px minmax(0,1fr) auto; gap:5px; margin-bottom:8px; }
+    #spreadsheet-name-box { width:58px; flex:auto; padding:8px 3px; }
+    .spreadsheet-formula-row input { padding:8px 6px; font-size:.78rem; }
+    .spreadsheet-formula-row .btn-apply { padding:8px 9px; font-size:.75rem; }
+    .spreadsheet-grid-wrap { min-height:100px; }
+    .spreadsheet-grid-table th { min-width:88px; width:88px; }
+    .spreadsheet-grid-table td { min-width:88px; width:88px; }
+    .spreadsheet-grid-table th.spreadsheet-corner, .spreadsheet-grid-table th.spreadsheet-row-head { min-width:38px; width:38px; max-width:38px; }
+    .spreadsheet-footer-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+    .spreadsheet-footer-actions .btn-back { width:100%; min-width:0; padding:8px 5px; font-size:.72rem; white-space:normal; line-height:1.2; }
+    .spreadsheet-help { font-size:.68rem; margin-top:6px; }
 }
