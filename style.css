@@ -1394,3 +1394,41 @@ th.sortable:hover { color: #f1f5f9; }
   .spreadsheet-grid-table th.spreadsheet-corner,
   .spreadsheet-grid-table th.spreadsheet-row-head { min-width:38px; width:38px; max-width:38px; }
 }
+
+
+/* V17: isolate the spreadsheet from the site's generic mobile card-table rules.
+   The generic mobile rules hide every thead and turn tbody/tr/td into stacked cards,
+   which is why the sheet looked like one vertical column with empty space on the right. */
+@media screen and (max-width: 640px) {
+  #spreadsheet-grid { display:block !important; width:max-content !important; min-width:100% !important; }
+  #spreadsheet-grid .spreadsheet-grid-table {
+    display:table !important; width:max-content !important; min-width:100% !important;
+    table-layout:auto !important; border-collapse:separate !important; border-spacing:0 !important;
+  }
+  #spreadsheet-grid .spreadsheet-grid-table thead {
+    display:table-header-group !important; position:static !important; top:auto !important; left:auto !important;
+  }
+  #spreadsheet-grid .spreadsheet-grid-table tbody { display:table-row-group !important; }
+  #spreadsheet-grid .spreadsheet-grid-table tr {
+    display:table-row !important; background:transparent !important; border:0 !important;
+    border-radius:0 !important; padding:0 !important; margin:0 !important;
+  }
+  #spreadsheet-grid .spreadsheet-grid-table th,
+  #spreadsheet-grid .spreadsheet-grid-table td {
+    display:table-cell !important; box-sizing:border-box !important;
+    white-space:nowrap !important; min-width:110px !important; width:110px !important;
+    max-width:220px !important; padding:0 !important; margin:0 !important;
+    border-radius:0 !important; vertical-align:middle !important;
+  }
+  #spreadsheet-grid .spreadsheet-grid-table th.spreadsheet-corner,
+  #spreadsheet-grid .spreadsheet-grid-table th.spreadsheet-row-head {
+    position:sticky !important; min-width:38px !important; width:38px !important;
+    max-width:38px !important; padding:3px 4px !important;
+  }
+  #spreadsheet-grid .spreadsheet-grid-table td::before { content:none !important; display:none !important; }
+  #spreadsheet-grid .spreadsheet-grid-table td input.spreadsheet-cell {
+    display:block !important; width:100% !important; min-width:0 !important; max-width:none !important;
+    height:26px !important; padding:3px 5px !important; font-size:12px !important;
+  }
+}
+
