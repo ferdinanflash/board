@@ -9,7 +9,7 @@
 		<link rel="stylesheet" href="style.css?v=3">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-		<script src="events.js?v=3" defer></script>
+		<script src="events.js?v=4" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -61,6 +61,19 @@
 				</div>
 			</section>
 
+			<!-- HERO POWER SHEETS -->
+			<section id="hero-power-page" class="hidden">
+				<button class="btn-back" onclick="showEventMenu()">&lt; Back to Events</button>
+				<div class="schedule-actions"><h1 class="page-title" style="margin-bottom:0;">⚡ Hero Power Sheets</h1><button id="hero-power-add-sheet" class="btn-apply hidden" style="margin-bottom:0;" onclick="openHeroPowerSheetModal()">+ New Sheet</button></div>
+				<p class="page-subtitle">Manage player power records in a spreadsheet-style table. Sheets can represent different dates or event rounds.</p>
+				<div id="hero-power-sheet-list" class="list-container"></div>
+				<section id="hero-power-workspace" class="hero-power-workspace hidden">
+					<div class="hero-power-workspace-head"><div><h2 id="hero-power-current-title">Sheet</h2><p id="hero-power-sheet-meta" class="page-subtitle"></p></div><div class="schedule-actions-buttons"><button class="btn-back" onclick="closeHeroPowerWorkspace()">Back to Sheets</button><button id="hero-power-save" class="btn-apply hidden" onclick="saveHeroPowerRows()">Save Changes</button></div></div>
+					<div class="hero-power-table-wrap"><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th><th class="hidden" id="hero-power-actions-head">Action</th></tr></thead><tbody id="hero-power-rows"></tbody></table></div>
+					<div class="hero-power-bottom"><button id="hero-power-add-row" class="btn-back hidden" onclick="addHeroPowerRow()">+ Add Player Row</button><div id="hero-power-summary" class="hero-power-summary"></div></div>
+				</section>
+			</section>
+
 			<!-- PAGE 2: EVENT DURATION LIST (each entry = one run of that event) -->
 			<section id="event-duration-page" class="hidden">
 				<button class="btn-back" onclick="showEventMenu()">&lt; Back to Events</button>
@@ -101,6 +114,17 @@
 				<p id="screenshot-empty" class="page-subtitle hidden" style="margin-top: 20px;">No files uploaded for this date range yet.</p>
 			</section>
 		</main>
+
+		<!-- CREATE HERO POWER SHEET -->
+		<div id="hero-power-sheet-modal" class="modal hidden">
+			<div class="modal-content custom-form-modal">
+				<span class="close-modal" onclick="closeHeroPowerSheetModal()">&times;</span>
+				<h2 class="modal-title">New Hero Power Sheet</h2>
+				<div class="form-group"><label>Sheet Name / Event</label><input id="hero-power-sheet-name" type="text" placeholder="e.g. SvS Preparation · Oct 22"></div>
+				<div class="form-group"><label>Sheet Date</label><input id="hero-power-sheet-date" type="date"></div>
+				<div class="form-actions"><button class="btn-back" onclick="closeHeroPowerSheetModal()">Cancel</button><button class="btn-apply" onclick="createHeroPowerSheet()">Create Sheet</button></div>
+			</div>
+		</div>
 
 		<!-- ADD EVENT DURATION MODAL -->
 		<div id="duration-modal" class="modal hidden">

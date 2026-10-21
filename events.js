@@ -57,6 +57,7 @@ const EVENT_TYPES = [
 // this opens the dedicated "leaderboard-page" (two tables: Top 100 / Top 200)
 // instead of the duration -> gallery flow.
 const LEADERBOARD_MENU_ITEM = { key: 'leaderboard_players', label: 'Must on Leaderboard Player', icon: '🏆' };
+const HERO_POWER_MENU_ITEM = { key: 'hero_power_sheets', label: 'Hero Power Sheets', icon: '⚡' };
 
 // ================= STATE =================
 let supabaseClient = null;
@@ -74,6 +75,10 @@ let currentDurations = [];     // rows from event_instances for currentEventType
 let currentDuration = null;    // the selected row from currentDurations
 let currentScreenshots = [];   // rows from event_screenshots for currentDuration
 let currentLightboxShotId = null;
+let currentHeroPowerSheets = [];
+let currentHeroPowerSheet = null;
+let currentHeroPowerRows = [];
+let heroPowerDirty = false;
 
 // ================= INIT =================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -145,6 +150,9 @@ function updateAdminUI() {
     document.getElementById('upload-screenshot-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('delete-duration-btn')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('hero-power-add-sheet')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('hero-power-save')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('hero-power-add-row')?.classList.toggle('hidden', !isAdmin);
     if (currentLeaderboardPlayers.length) renderLeaderboardTables();
 
     const storageBar = document.getElementById('admin-storage-bar');
@@ -204,6 +212,8 @@ function refreshCurrentView() {
         loadDurations(currentEventType.key);
     } else if (!document.getElementById('leaderboard-page')?.classList.contains('hidden')) {
         loadLeaderboardPlayers();
+    } else if (!document.getElementById('hero-power-page')?.classList.contains('hidden')) {
+        loadHeroPowerSheets();
     }
 }
 
@@ -340,7 +350,8 @@ function renderEventTypeList() {
         </div>
     `;
 
-    container.innerHTML = eventItemsHtml + leaderboardItemHtml;
+    const heroPowerItemHtml = `<div class="list-item" onclick="showHeroPowerPage()" role="button" tabindex="0" aria-label="${escapeHtml(HERO_POWER_MENU_ITEM.label)}"><span>${HERO_POWER_MENU_ITEM.icon} ${escapeHtml(HERO_POWER_MENU_ITEM.label)}</span><span class="arrow">&gt;</span></div>`;
+    container.innerHTML = eventItemsHtml + leaderboardItemHtml + heroPowerItemHtml;
 }
 
 function selectEventType(key) {
@@ -368,8 +379,71 @@ function showEventMenu() {
     document.getElementById('event-duration-page').classList.add('hidden');
     document.getElementById('event-gallery-page').classList.add('hidden');
     document.getElementById('leaderboard-page').classList.add('hidden');
+    document.getElementById('hero-power-page').classList.add('hidden');
     document.getElementById('event-menu-page').classList.remove('hidden');
     closeLeaderboardTierModal();
+}
+
+// ================= HERO POWER SHEETS =================
+function showHeroPowerPage() {
+    ['event-menu-page','event-duration-page','event-gallery-page','leaderboard-page'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    document.getElementById('hero-power-page').classList.remove('hidden');
+    document.getElementById('hero-power-workspace').classList.add('hidden');
+    document.getElementById('hero-power-sheet-list').classList.remove('hidden');
+    document.getElementById('hero-power-add-sheet')?.classList.toggle('hidden', !isAdmin);
+    loadHeroPowerSheets();
+}
+async function loadHeroPowerSheets() {
+    const client = getSupabase(); if (!client) return;
+    const { data, error } = await client.from('hero_power_sheets').select('*').order('sheet_date', {ascending:false}).order('created_at', {ascending:false});
+    if (error) { showToast('Could not load Hero Power sheets. Run hero-power-sheets-supabase-setup.sql first.', 'error'); return; }
+    currentHeroPowerSheets = data || [];
+    renderHeroPowerSheets();
+}
+function renderHeroPowerSheets() {
+    const el = document.getElementById('hero-power-sheet-list'); if (!el) return;
+    if (!currentHeroPowerSheets.length) { el.innerHTML = '<p class="page-subtitle">No sheets yet. Staff can create the first sheet.</p>'; return; }
+    el.innerHTML = currentHeroPowerSheets.map(sh => `<div class="list-item" role="button" tabindex="0" onclick="openHeroPowerSheet(${sh.id})"><span>⚡ ${escapeHtml(sh.name)} <small class="hero-power-date">${escapeHtml(sh.sheet_date || '')}</small></span><span class="arrow">&gt;</span></div>`).join('');
+}
+function openHeroPowerSheetModal() { if (!isAdmin) return; document.getElementById('hero-power-sheet-name').value=''; document.getElementById('hero-power-sheet-date').value=new Date().toISOString().slice(0,10); document.getElementById('hero-power-sheet-modal').classList.remove('hidden'); }
+function closeHeroPowerSheetModal() { document.getElementById('hero-power-sheet-modal').classList.add('hidden'); }
+async function createHeroPowerSheet() {
+    if (!isAdmin) return;
+    const name=document.getElementById('hero-power-sheet-name').value.trim(), date=document.getElementById('hero-power-sheet-date').value;
+    if (!name) { showToast('Enter a sheet name', 'warning'); return; }
+    const client=getSupabase(); const {data,error}=await client.from('hero_power_sheets').insert({name,sheet_date:date||null,created_by:currentStaffUsername}).select().single();
+    if(error){showToast('Failed to create sheet','error');return;}
+    closeHeroPowerSheetModal(); await loadHeroPowerSheets(); openHeroPowerSheet(data.id);
+}
+async function openHeroPowerSheet(id) {
+    const client=getSupabase(); const sheet=currentHeroPowerSheets.find(x=>x.id===id); if(!sheet||!client)return;
+    const {data,error}=await client.from('hero_power_entries').select('*').eq('sheet_id',id).order('sort_order',{ascending:true});
+    if(error){showToast('Could not load sheet rows. Check the Hero Power SQL setup.','error');return;}
+    currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r})); heroPowerDirty=false;
+    document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
+    document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
+    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
+    renderHeroPowerRows();
+}
+function closeHeroPowerWorkspace(){ currentHeroPowerSheet=null; document.getElementById('hero-power-workspace').classList.add('hidden'); document.getElementById('hero-power-sheet-list').classList.remove('hidden'); }
+function addHeroPowerRow(){if(!isAdmin)return; currentHeroPowerRows.push({name:'',alliance:'',hero_power:null}); heroPowerDirty=true; renderHeroPowerRows();}
+function updateHeroPowerCell(index,field,value){if(!isAdmin)return; currentHeroPowerRows[index][field]=field==='hero_power'?(value===''?null:Number(value)):value; heroPowerDirty=true;}
+function removeHeroPowerRow(index){if(!isAdmin)return;currentHeroPowerRows.splice(index,1);heroPowerDirty=true;renderHeroPowerRows();}
+function renderHeroPowerRows(){
+ const tbody=document.getElementById('hero-power-rows');
+ tbody.innerHTML=currentHeroPowerRows.map((r,i)=>`<tr><td class="hp-row-number">${i+1}</td><td><input ${isAdmin?'':'disabled'} value="${escapeHtml(r.name||'')}" placeholder="Player name" onchange="updateHeroPowerCell(${i},'name',this.value)"></td><td><input ${isAdmin?'':'disabled'} value="${escapeHtml(r.alliance||'')}" placeholder="Alliance" onchange="updateHeroPowerCell(${i},'alliance',this.value)"></td><td><input ${isAdmin?'':'disabled'} type="number" min="0" step="1" value="${r.hero_power??''}" placeholder="0" onchange="updateHeroPowerCell(${i},'hero_power',this.value)"></td>${isAdmin?`<td><button class="hero-power-remove" onclick="removeHeroPowerRow(${i})" aria-label="Remove row">×</button></td>`:''}</tr>`).join('');
+ document.getElementById('hero-power-actions-head').classList.toggle('hidden',!isAdmin);
+ const totals={}; currentHeroPowerRows.forEach(r=>{if(r.alliance&&Number(r.hero_power)>0)totals[r.alliance]=(totals[r.alliance]||0)+Number(r.hero_power)});
+ const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
+ document.getElementById('hero-power-summary').innerHTML=`<div class="hero-power-total">Players: <b>${currentHeroPowerRows.filter(r=>r.name).length}</b> · Total Power: <b>${currentHeroPowerRows.reduce((a,r)=>a+(Number(r.hero_power)||0),0).toLocaleString()}</b></div>${sorted.length?`<div class="hero-power-alliance-totals"><b>Alliance totals</b>${sorted.map(([a,n])=>`<span>${escapeHtml(a)} <strong>${n.toLocaleString()}</strong></span>`).join('')}</div>`:''}`;
+}
+async function saveHeroPowerRows(){
+ if(!isAdmin||!currentHeroPowerSheet)return;
+ const rows=currentHeroPowerRows.filter(r=>String(r.name||'').trim()).map((r,i)=>({sheet_id:currentHeroPowerSheet.id,name:r.name.trim(),alliance:(r.alliance||'').trim()||null,hero_power:Number(r.hero_power)||0,sort_order:i}));
+ const client=getSupabase(); const {error:delError}=await client.from('hero_power_entries').delete().eq('sheet_id',currentHeroPowerSheet.id);
+ if(delError){showToast('Could not save rows (delete step failed)','error');return;}
+ if(rows.length){const {error}=await client.from('hero_power_entries').insert(rows);if(error){showToast('Could not save Hero Power rows','error');return;}}
+ heroPowerDirty=false; showToast('Hero Power sheet saved','success'); await loadHeroPowerSheets();
 }
 
 // ================= PAGE 1b: MUST ON LEADERBOARD PLAYER (leaderboard_players) =================
@@ -380,6 +454,9 @@ function showLeaderboardPage() {
     document.getElementById('leaderboard-page').classList.remove('hidden');
 
     document.getElementById('add-player-btn')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('hero-power-add-sheet')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('hero-power-save')?.classList.toggle('hidden', !isAdmin);
+    document.getElementById('hero-power-add-row')?.classList.toggle('hidden', !isAdmin);
     closeLeaderboardTierModal();
 
     loadLeaderboardPlayers();
