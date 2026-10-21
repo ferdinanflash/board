@@ -438,30 +438,94 @@ function renderHeroPowerRows(){
  const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
  document.getElementById('hero-power-summary').innerHTML=`<div class="hero-power-total">Players: <b>${currentHeroPowerRows.filter(r=>r.name).length}</b> · Total Power: <b>${currentHeroPowerRows.reduce((a,r)=>a+(Number(r.hero_power)||0),0).toLocaleString()}</b></div>${sorted.length?`<div class="hero-power-alliance-totals"><b>Alliance totals</b>${sorted.map(([a,n])=>`<span>${escapeHtml(a)} <strong>${n.toLocaleString()}</strong></span>`).join('')}</div>`:''}`;
 }
-// Import spreadsheet-like files (Excel, CSV, TSV, TXT)
+// Import spreadsheet-like files (Excel, CSV, TSV, TXT). Detect headers anywhere
+// in the worksheet and support multiple Name/Power tables placed side-by-side.
 function parseHeroPowerDelimited(text) {
- const first=(text.split(/\r?\n/).find(x=>x.trim())||''); const delim=(first.match(/\t/g)||[]).length>(first.match(/,/g)||[]).length?'\t':',';
+ const first=(text.split(/\r?\n/).find(x=>x.trim())||''); const delim=(first.match(/\t/g)||[]).length>(first.match(/,/g)||[]).length? '\t':',';
  const rows=[]; let row=[], cell='', quoted=false;
  for(let i=0;i<text.length;i++){const c=text[i]; if(c==='"'&&quoted&&text[i+1]==='"'){cell+='"';i++;}else if(c==='"'){quoted=!quoted;}else if(c===delim&&!quoted){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}else cell+=c;}
  if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);} return rows;
 }
-function heroPowerHeaderIndex(headers, candidates){return headers.findIndex(h=>candidates.includes(String(h||'').toLowerCase().replace(/[^a-z]/g,'')));}
+function heroPowerNormalizeHeader(v){return String(v??'').trim().toLowerCase().replace(/[^a-z0-9]/g,'');}
+function heroPowerHeaderIndex(headers,candidates){return headers.findIndex(h=>candidates.includes(heroPowerNormalizeHeader(h)));}
+function heroPowerParseNumber(value){
+ if(typeof value==='number') return Number.isFinite(value)?value:NaN;
+ let s=String(value??'').trim(); if(!s) return NaN;
+ s=s.replace(/[,_\s]/g,'').replace(/^(power|hp):?/i,'');
+ if(/^\d+(\.\d+)?[kmb]$/i.test(s)){const suffix=s.slice(-1).toLowerCase();return Number(s.slice(0,-1))*({k:1e3,m:1e6,b:1e9}[suffix]);}
+ return /^\d+(\.\d+)?$/.test(s)?Number(s):NaN;
+}
+function heroPowerRowsFromMatrix(matrix){
+ const nameAliases=['name','playername','player','username','playerid'];
+ const allianceAliases=['alliance','alliancecode','alliance tag','tag','guild','team'];
+ const powerAliases=['heropower','power','totalheropower','playerpower','hero power'];
+ // Search the first 50 rows for a header row; exports converted from PDF often
+ // include title/blank rows before the actual column headings.
+ let headerRow=-1, groups=[];
+ for(let ri=0;ri<Math.min(matrix.length,50);ri++){
+  const h=(matrix[ri]||[]).map(heroPowerNormalizeHeader);
+  const nameCols=[]; h.forEach((v,i)=>{if(nameAliases.includes(v))nameCols.push(i);});
+  const powerCols=[]; h.forEach((v,i)=>{if(powerAliases.includes(v))powerCols.push(i);});
+  if(nameCols.length&&powerCols.length){
+   const candidate=[];
+   for(const ni of nameCols){const nextName=nameCols.find(x=>x>ni)??Infinity;const pi=powerCols.filter(x=>x>ni&&x<nextName).sort((a,b)=>a-b)[0]??powerCols.filter(x=>x===ni).sort((a,b)=>a-b)[0];if(pi===undefined)continue;
+    const ais=h.findIndex((v,i)=>i>ni&&i<pi&&allianceAliases.includes(v));
+    candidate.push({ni,ai:ais,pi});
+   }
+   if(candidate.length){headerRow=ri;groups=candidate;break;}
+  }
+ }
+ const out=[];
+ if(headerRow>=0){
+  for(let ri=headerRow+1;ri<matrix.length;ri++){
+   const row=matrix[ri]||[];
+   for(const g of groups){const name=String(row[g.ni]??'').trim();const power=heroPowerParseNumber(row[g.pi]);if(!name||!Number.isFinite(power)||power<0)continue;
+    // Skip repeated header lines and aggregate labels that can appear in report exports.
+    if(nameAliases.includes(heroPowerNormalizeHeader(name))||['total','alliance','hero power'].includes(heroPowerNormalizeHeader(name)))continue;
+    out.push({name,alliance:g.ai>=0?String(row[g.ai]??'').trim():'',hero_power:power});
+   }
+  }
+ }
+ // Fallback for headerless sheets: accept rows with a text name and a numeric
+ // value in a nearby column, rather than assuming row 1 is the header.
+ if(!out.length){
+  for(const row of matrix){if(!Array.isArray(row))continue;
+   for(let ni=0;ni<row.length;ni++){
+    const name=String(row[ni]??'').trim();if(!name||name.length>80||Number.isFinite(heroPowerParseNumber(name)))continue;
+    if(nameAliases.includes(heroPowerNormalizeHeader(name))||['name','total','alliance'].includes(heroPowerNormalizeHeader(name)))continue;
+    let pi=-1,power=NaN;for(let j=ni+1;j<Math.min(row.length,ni+4);j++){const n=heroPowerParseNumber(row[j]);if(Number.isFinite(n)&&n>=0){pi=j;power=n;break;}}
+    if(pi<0)continue;
+    const alliance=ni+1<pi?String(row[ni+1]??'').trim():'';
+    out.push({name,alliance,hero_power:power});
+   }
+  }
+ }
+ // Remove duplicate detections caused by merged/duplicated report columns.
+ const seen=new Set();return out.filter(r=>{const key=[r.name.toLowerCase(),r.alliance.toLowerCase(),r.hero_power].join('|');if(seen.has(key))return false;seen.add(key);return true;});
+}
 async function handleHeroPowerImportFile(event){
  if(!isAdmin||!currentHeroPowerSheet)return; const file=event.target.files?.[0];event.target.value='';if(!file)return;
  try{
   let matrix; const ext=file.name.split('.').pop().toLowerCase();
-  if(['xlsx','xls'].includes(ext)){if(!window.XLSX)throw new Error('Excel reader is not ready. Refresh and try again.');const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array'});matrix=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});}
-  else matrix=parseHeroPowerDelimited(await file.text());
-  matrix=matrix.filter(r=>Array.isArray(r)&&r.some(v=>String(v??'').trim()));if(!matrix.length)throw new Error('No data rows found.');
-  let headers=matrix[0].map(v=>String(v??'').trim());let ni=heroPowerHeaderIndex(headers,['name','playername','player','username']);let ai=heroPowerHeaderIndex(headers,['alliance','alliancecode','tag']);let pi=heroPowerHeaderIndex(headers,['heropower','power','totalheropower']);
-  if(ni<0||pi<0){ni=0;ai=1;pi=2;}
-  else matrix=matrix.slice(1);
-  pendingHeroPowerImport=matrix.map(r=>({name:String(r[ni]??'').trim(),alliance:ai>=0?String(r[ai]??'').trim():'',hero_power:Number(String(r[pi]??'').replace(/[,_\s]/g,''))||0})).filter(r=>r.name);
-  if(!pendingHeroPowerImport.length)throw new Error('Could not find player rows. Check the Name and Hero Power columns.');
+  if(['xlsx','xls'].includes(ext)){
+   if(!window.XLSX)throw new Error('Excel reader is not ready. Refresh the page and try again.');
+   const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array',cellDates:false});
+   if(!wb.SheetNames?.length)throw new Error('The Excel workbook has no worksheets.');
+   // Try worksheets in order; the first sheet is not always the data sheet.
+   let detected=[];
+   for(const sheetName of wb.SheetNames){const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:true,blankrows:false});const parsed=heroPowerRowsFromMatrix(rows);if(parsed.length>detected.length)detected=parsed;}
+   pendingHeroPowerImport=detected;
+  } else {
+   matrix=parseHeroPowerDelimited(await file.text());
+   matrix=matrix.filter(r=>Array.isArray(r)&&r.some(v=>String(v??'').trim()));
+   pendingHeroPowerImport=heroPowerRowsFromMatrix(matrix);
+  }
+  if(!pendingHeroPowerImport.length)throw new Error('No player rows were detected in this Excel file. Make sure a worksheet contains player names and numeric Hero Power values.');
   document.getElementById('hero-power-import-preview').innerHTML=`<p><b>${pendingHeroPowerImport.length}</b> player rows detected from <b>${escapeHtml(file.name)}</b></p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
   document.getElementById('hero-power-import-modal').classList.remove('hidden');
  }catch(err){showToast(err.message||'Could not read this file','error');}
 }
+
 function closeHeroPowerImportPreview(){document.getElementById('hero-power-import-modal').classList.add('hidden');pendingHeroPowerImport=[];}
 function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHeroPowerImport.length)return;currentHeroPowerRows=pendingHeroPowerImport.map(r=>({...r}));heroPowerDirty=true;closeHeroPowerImportPreview();renderHeroPowerRows();showToast('Import preview applied. Click Save Changes to store it.','success');}
 
