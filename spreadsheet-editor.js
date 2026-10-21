@@ -8,7 +8,7 @@
   const $ = id => document.getElementById(id);
   const COLS = 12, ROWS = 30;
   let visibleCols = COLS, visibleRows = ROWS;
-  let workbookSheets = [], activeSheet = 0, selected = { c: 0, r: 0 }, dirty = false;
+  let workbookSheets = [], activeSheet = 0, selected = { c: 0, r: 0 }, dirty = false, serverWorkbookId = null;
   let renderQueued = false;
   const colName = c => window.SheetEngine.idxToCol(c);
   const addr = (c, r) => colName(c) + (r + 1);
@@ -109,7 +109,7 @@
         workbookSheets = wb.SheetNames.map(name => ({name,model:window.SheetEngine.modelFromXlsxSheet(wb.Sheets[name],window.XLSX)}));
         if (!workbookSheets.length) workbookSheets=[{name:'Sheet1',model:new window.SheetEngine.Model()}];
       }
-      activeSheet=0; selected={c:0,r:0}; dirty=true; renderTabs(); renderGrid(); updateFormulaBar(); $('spreadsheet-status').textContent=`Imported ${file.name} · review and export when ready`;
+      activeSheet=0; selected={c:0,r:0}; dirty=true; serverWorkbookId=null; $('spreadsheet-workbook-title').value=file.name.replace(/\.[^.]+$/,'').slice(0,100) || 'Imported workbook'; renderTabs(); renderGrid(); updateFormulaBar(); $('spreadsheet-status').textContent=`Imported ${file.name} · review and export when ready`;
     } catch(err) { alert('Could not import file: '+(err?.message||err)); }
   }
   function exportFile() {
@@ -136,6 +136,83 @@
     if(!confirm(`Delete sheet “${current().name}”? This cannot be undone.`))return;
     workbookSheets.splice(activeSheet,1); activeSheet=Math.max(0,activeSheet-1); selected={c:0,r:0}; markDirty(); renderTabs(); renderGrid(); updateFormulaBar();
   }
+  function serializeWorkbook() {
+    return { version: 1, sheets: workbookSheets.map(s => ({ name: s.name, model: s.model.toJSON() })), activeSheet, selected, updatedAt: new Date().toISOString() };
+  }
+  function restoreWorkbook(payload) {
+    const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    if (!data || !Array.isArray(data.sheets) || !data.sheets.length) throw new Error('This saved workbook has no valid worksheets.');
+    workbookSheets = data.sheets.map((s, i) => ({ name: String(s.name || `Sheet${i + 1}`).slice(0, 31), model: new window.SheetEngine.Model(s.model || {}) }));
+    activeSheet = Math.max(0, Math.min(Number(data.activeSheet) || 0, workbookSheets.length - 1));
+    selected = data.selected && Number.isFinite(data.selected.c) && Number.isFinite(data.selected.r) ? { c: Math.max(0, Math.min(77, data.selected.c)), r: Math.max(0, Math.min(999, data.selected.r)) } : { c: 0, r: 0 };
+    visibleRows = ROWS; visibleCols = COLS; dirty = false;
+    renderTabs(); renderGrid(); updateFormulaBar();
+  }
+  function getServerClient() {
+    const getClient = window.get3475SupabaseClient;
+    if (typeof getClient !== 'function') throw new Error('Supabase client is not ready. Reload the page and try again.');
+    const client = getClient();
+    if (!client) throw new Error('Supabase could not be initialized.');
+    return client;
+  }
+  async function requireStaffSession(client) {
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    if (!data?.session) throw new Error('Please sign in using the Alliance Staff button before saving or opening shared server workbooks.');
+    return data.session;
+  }
+  async function saveToServer() {
+    const btn = document.querySelector('[onclick="spreadsheetSaveToServer()"]');
+    if (btn?.disabled) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      const client = getServerClient();
+      const session = await requireStaffSession(client);
+      const title = ($('spreadsheet-workbook-title')?.value || '').trim().slice(0, 100);
+      if (!title) throw new Error('Enter a workbook name before saving.');
+      const record = { name: title, workbook: serializeWorkbook(), updated_at: new Date().toISOString(), updated_by: session.user.id };
+      let result;
+      if (serverWorkbookId) {
+        result = await client.from('spreadsheet_workbooks').update(record).eq('id', serverWorkbookId).select('id,name,updated_at').single();
+      } else {
+        result = await client.from('spreadsheet_workbooks').insert({ ...record, created_by: session.user.id }).select('id,name,updated_at').single();
+      }
+      if (result.error) throw result.error;
+      serverWorkbookId = result.data.id;
+      dirty = false; renderTabs();
+      $('spreadsheet-status').textContent = `Saved to Supabase · ${new Date(result.data.updated_at || Date.now()).toLocaleString()}`;
+      try { localStorage.setItem('wos3475_spreadsheet_draft', JSON.stringify(serializeWorkbook())); } catch (_) {}
+    } catch (err) {
+      console.error('Spreadsheet server save failed:', err);
+      alert('Could not save to Supabase: ' + (err?.message || err) + (String(err?.code || '') === '42P01' ? '\n\nRun spreadsheet-editor-supabase-setup.sql in the Supabase SQL Editor first.' : ''));
+    } finally { if (btn) { btn.disabled = false; btn.textContent = 'Save to Server'; } }
+  }
+  async function openFromServer() {
+    const btn = document.querySelector('[onclick="spreadsheetOpenFromServer()"]');
+    if (btn?.disabled) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    try {
+      const client = getServerClient();
+      await requireStaffSession(client);
+      const { data, error } = await client.from('spreadsheet_workbooks').select('id,name,workbook,updated_at,created_at').order('updated_at', { ascending: false }).limit(100);
+      if (error) throw error;
+      if (!data?.length) { alert('No saved workbooks found on the server yet.'); return; }
+      const choices = data.map((row, i) => `${i + 1}. ${row.name} — ${new Date(row.updated_at || row.created_at).toLocaleString()}`).join('\n');
+      const answer = prompt('Choose a workbook number to open:\n\n' + choices, '1');
+      if (answer === null) return;
+      const index = Number.parseInt(answer, 10) - 1;
+      if (!Number.isInteger(index) || index < 0 || index >= data.length) { alert('Invalid workbook number.'); return; }
+      const row = data[index];
+      if (dirty && !confirm('You have unsaved changes. Open this workbook and discard those changes?')) return;
+      restoreWorkbook(row.workbook);
+      serverWorkbookId = row.id;
+      $('spreadsheet-workbook-title').value = row.name;
+      $('spreadsheet-status').textContent = `Loaded from Supabase · ${new Date(row.updated_at || row.created_at).toLocaleString()}`;
+    } catch (err) {
+      console.error('Spreadsheet server load failed:', err);
+      alert('Could not open server workbook: ' + (err?.message || err) + (String(err?.code || '') === '42P01' ? '\n\nRun spreadsheet-editor-supabase-setup.sql in the Supabase SQL Editor first.' : ''));
+    } finally { if (btn) { btn.disabled = false; btn.textContent = 'Open Server'; } }
+  }
   function saveDraft() {
     try { localStorage.setItem('wos3475_spreadsheet_draft',JSON.stringify({sheets:workbookSheets.map(s=>({name:s.name,model:s.model.toJSON()})),activeSheet,selected,updatedAt:new Date().toISOString()})); dirty=false; renderTabs(); $('spreadsheet-status').textContent='Draft saved in this browser'; }
     catch(e){alert('Could not save local draft. Browser storage may be full or disabled.');}
@@ -160,6 +237,8 @@
   window.spreadsheetRenameSheet=renameSheet;
   window.spreadsheetDeleteSheet=removeSheet;
   window.spreadsheetSaveDraft=saveDraft;
+  window.spreadsheetSaveToServer=saveToServer;
+  window.spreadsheetOpenFromServer=openFromServer;
   window.spreadsheetAddRow=addRow;
   window.spreadsheetAddColumn=addColumn;
   window.addEventListener('keydown', e => { if(e.key==='Escape'&&!$('spreadsheet-editor-modal')?.classList.contains('hidden'))closeSpreadsheetEditor(); });

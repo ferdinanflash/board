@@ -11,7 +11,7 @@
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 		<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
 		<script src="spreadsheet-engine.js?v=2" defer></script>
-		<script src="spreadsheet-editor.js?v=3" defer></script>
+		<script src="spreadsheet-editor.js?v=4" defer></script>
 		<script src="events.js?v=5" defer></script>
 	</head>
 	<body>
@@ -124,7 +124,7 @@
 				<div class="spreadsheet-editor-heading"><div><h2 class="modal-title">Spreadsheet Editor</h2><p class="page-subtitle">Edit cells, formulas, multiple sheets, and import/export XLSX files.</p></div><button class="close-modal" onclick="closeSpreadsheetEditor()" aria-label="Close spreadsheet editor">&times;</button></div>
 				<div class="spreadsheet-toolbar">
 					<label class="spreadsheet-file-button">Import XLSX / CSV<input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onchange="spreadsheetImportFile(event)" hidden></label>
-					<button class="btn-back" onclick="spreadsheetExportFile()">Export XLSX</button><button class="btn-back" onclick="spreadsheetSaveDraft()">Save Draft</button><span id="spreadsheet-status" class="spreadsheet-status">New workbook</span>
+					<input id="spreadsheet-workbook-title" class="spreadsheet-workbook-title" type="text" maxlength="100" placeholder="Workbook name" aria-label="Workbook name" value="Untitled workbook"><button class="btn-apply" onclick="spreadsheetSaveToServer()">Save to Server</button><button class="btn-back" onclick="spreadsheetOpenFromServer()">Open Server</button><button class="btn-back" onclick="spreadsheetExportFile()">Export XLSX</button><button class="btn-back" onclick="spreadsheetSaveDraft()">Save Draft</button><span id="spreadsheet-status" class="spreadsheet-status">New workbook</span>
 				</div>
 				<div class="spreadsheet-formula-row"><input id="spreadsheet-name-box" aria-label="Cell address" value="A1" onchange="spreadsheetSelectCell(this.value)"><span class="spreadsheet-fx">fx</span><input id="spreadsheet-formula-input" aria-label="Cell value or formula" placeholder="Enter a value or formula, e.g. =SUM(B2:B10)" onkeydown="if(event.key==='Enter'){event.preventDefault();spreadsheetApplyFormula();}"><button class="btn-apply" onclick="spreadsheetApplyFormula()">Apply</button></div>
 				<div class="spreadsheet-grid-wrap"><div id="spreadsheet-grid"></div></div>

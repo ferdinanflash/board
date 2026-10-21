@@ -133,6 +133,9 @@ function getSupabase() {
     return supabaseClient;
 }
 
+// Shared with the spreadsheet editor so server saves use the same staff session.
+window.get3475SupabaseClient = getSupabase;
+
 function applyAuthSession(session) {
     isAdmin = !!session;
     currentStaffUsername = session ? staffEmailToUsername(session.user.email) : null;
