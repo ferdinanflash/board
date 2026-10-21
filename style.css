@@ -1244,6 +1244,10 @@ th.sortable:hover { color: #f1f5f9; }
 }
 
 /* ================= HERO POWER SHEET WORKSPACE ================= */
+.hero-power-sheet-list-item { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.hero-power-sheet-list-item .list-item { flex:1; margin:0; min-width:0; }
+.hero-power-delete-sheet { flex:0 0 auto; border:0; border-radius:6px; padding:8px 12px; color:#fecaca; background:#7f1d1d; cursor:pointer; font-size:1.05rem; }
+.hero-power-delete-sheet:hover { background:#991b1b; }
 .hero-power-workspace { margin-top: 18px; }
 .hero-power-workspace-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
 .hero-power-workspace-head h2 { font-size:1.25rem; margin-bottom:5px; }

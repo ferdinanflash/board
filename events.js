@@ -407,7 +407,22 @@ async function loadHeroPowerSheets() {
 function renderHeroPowerSheets() {
     const el = document.getElementById('hero-power-sheet-list'); if (!el) return;
     if (!currentHeroPowerSheets.length) { el.innerHTML = '<p class="page-subtitle">No sheets yet. Staff can create the first sheet.</p>'; return; }
-    el.innerHTML = currentHeroPowerSheets.map(sh => `<div class="list-item" role="button" tabindex="0" onclick="openHeroPowerSheet(${sh.id})"><span>⚡ ${escapeHtml(sh.name)} <small class="hero-power-date">${escapeHtml(sh.sheet_date || '')}</small></span><span class="arrow">&gt;</span></div>`).join('');
+    el.innerHTML = currentHeroPowerSheets.map(sh => `<div class="hero-power-sheet-list-item"><button class="hero-power-delete-sheet ${isAdmin ? '' : 'hidden'}" onclick="event.stopPropagation();deleteHeroPowerSheet(${sh.id})" aria-label="Delete sheet ${escapeHtml(sh.name)}" title="Delete sheet">×</button><div class="list-item" role="button" tabindex="0" onclick="openHeroPowerSheet(${sh.id})"><span>⚡ ${escapeHtml(sh.name)} <small class="hero-power-date">${escapeHtml(sh.sheet_date || '')}</small></span><span class="arrow">&gt;</span></div></div>`).join('');
+}
+async function deleteHeroPowerSheet(id) {
+    if (!isAdmin) return;
+    const sheet = currentHeroPowerSheets.find(item => String(item.id) === String(id));
+    if (!sheet) return;
+    if (!confirm(`Delete sheet "${sheet.name}" and all player rows inside it? This cannot be undone.`)) return;
+    const client = getSupabase();
+    if (!client) return;
+    const { error: rowsError } = await client.from('hero_power_entries').delete().eq('sheet_id', id);
+    if (rowsError) { showToast('Could not delete player rows. Check Supabase permissions.', 'error'); return; }
+    const { error } = await client.from('hero_power_sheets').delete().eq('id', id);
+    if (error) { showToast('Could not delete sheet. Check Supabase permissions.', 'error'); return; }
+    currentHeroPowerSheets = currentHeroPowerSheets.filter(item => String(item.id) !== String(id));
+    renderHeroPowerSheets();
+    showToast('Sheet deleted', 'success');
 }
 function openHeroPowerSheetModal() { if (!isAdmin) return; document.getElementById('hero-power-sheet-name').value=''; document.getElementById('hero-power-sheet-date').value=new Date().toISOString().slice(0,10); document.getElementById('hero-power-sheet-modal').classList.remove('hidden'); }
 function closeHeroPowerSheetModal() { document.getElementById('hero-power-sheet-modal').classList.add('hidden'); }
@@ -545,11 +560,29 @@ function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHer
 
 async function saveHeroPowerRows(){
  if(!isAdmin||!currentHeroPowerSheet)return;
- const rows=currentHeroPowerRows.filter(r=>String(r.name||'').trim()).map((r,i)=>({sheet_id:currentHeroPowerSheet.id,name:r.name.trim(),alliance:(r.alliance||'').trim()||null,hero_power:Number(r.hero_power)||0,sort_order:i}));
- const client=getSupabase(); const {error:delError}=await client.from('hero_power_entries').delete().eq('sheet_id',currentHeroPowerSheet.id);
+ const client=getSupabase();
+ const sheetId=currentHeroPowerSheet.id;
+ const rows=currentHeroPowerRows
+  .filter(r=>String(r.name||'').trim())
+  .map((r,i)=>({ ...r, sheet_id:sheetId, name:String(r.name).trim(), alliance:(r.alliance||'').trim()||null, hero_power:Math.max(0,Number(r.hero_power)||0), sort_order:i }));
+ const existingIds=rows.filter(r=>r.id).map(r=>r.id);
+ // Delete only rows removed by the user; preserve IDs for existing entries.
+ let query=client.from('hero_power_entries').delete().eq('sheet_id',sheetId);
+ if(existingIds.length) query=query.not('id','in',`(${existingIds.join(',')})`);
+ const {error:delError}=await query;
  if(delError){showToast('Could not save rows (delete step failed)','error');return;}
- if(rows.length){const {error}=await client.from('hero_power_entries').insert(rows);if(error){showToast('Could not save Hero Power rows','error');return;}}
- heroPowerDirty=false; showToast('Hero Power sheet saved','success'); await loadHeroPowerSheets();
+ for(const row of rows){
+  const payload={sheet_id:sheetId,name:row.name,alliance:row.alliance,hero_power:row.hero_power,sort_order:row.sort_order};
+  const result=row.id
+   ? await client.from('hero_power_entries').update(payload).eq('id',row.id).eq('sheet_id',sheetId)
+   : await client.from('hero_power_entries').insert(payload).select().single();
+  if(result.error){showToast('Could not save Hero Power rows','error');return;}
+  if(!row.id&&result.data) row.id=result.data.id;
+ }
+ currentHeroPowerRows=rows;
+ heroPowerDirty=false;
+ showToast('Hero Power sheet saved to Supabase','success');
+ await openHeroPowerSheet(sheetId);
 }
 
 // ================= PAGE 1b: MUST ON LEADERBOARD PLAYER (leaderboard_players) =================
