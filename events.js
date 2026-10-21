@@ -423,10 +423,21 @@ async function openHeroPowerSheet(id) {
     currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r})); heroPowerDirty=false;
     document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
     document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
-    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
+    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
     renderHeroPowerRows();
 }
 function closeHeroPowerWorkspace(){ currentHeroPowerSheet=null; document.getElementById('hero-power-workspace').classList.add('hidden'); document.getElementById('hero-power-sheet-list').classList.remove('hidden'); }
+function exportHeroPowerSheetXlsx(){
+ if(!currentHeroPowerSheet){showToast('Open a Hero Power sheet first','warning');return;}
+ if(!window.XLSX||!window.SheetEngine){showToast('Spreadsheet engine is not ready. Refresh the page and try again.','error');return;}
+ const model=new SheetEngine.Model();
+ model.setCell('A1',{v:'Player Name'});model.setCell('B1',{v:'Alliance'});model.setCell('C1',{v:'Hero Power',z:'#,##0'});
+ currentHeroPowerRows.forEach((r,i)=>{const n=i+2;model.setCell('A'+n,{v:r.name||''});model.setCell('B'+n,{v:r.alliance||''});model.setCell('C'+n,{v:Number(r.hero_power)||0,z:'#,##0'});});
+ const totalRow=currentHeroPowerRows.length+2;model.setCell('A'+totalRow,{v:'TOTAL'});model.setCell('C'+totalRow,{f:`SUM(C2:C${Math.max(2,totalRow-1)})`,z:'#,##0'});
+ const wb=SheetEngine.exportXlsx(model,XLSX,currentHeroPowerSheet.name||'Hero Power');
+ XLSX.writeFile(wb,`${String(currentHeroPowerSheet.name||'hero-power').replace(/[^a-z0-9-_]+/gi,'_')}.xlsx`);
+}
+
 function addHeroPowerRow(){if(!isAdmin)return; currentHeroPowerRows.push({name:'',alliance:'',hero_power:null}); heroPowerDirty=true; renderHeroPowerRows();}
 function updateHeroPowerCell(index,field,value){if(!isAdmin)return; currentHeroPowerRows[index][field]=field==='hero_power'?(value===''?null:Number(value)):value; heroPowerDirty=true;}
 function removeHeroPowerRow(index){if(!isAdmin)return;currentHeroPowerRows.splice(index,1);heroPowerDirty=true;renderHeroPowerRows();}

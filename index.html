@@ -10,7 +10,8 @@
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 		<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-		<script src="events.js?v=4" defer></script>
+		<script src="spreadsheet-engine.js?v=1" defer></script>
+		<script src="events.js?v=5" defer></script>
 	</head>
 	<body>
 		<header class="navbar">
@@ -69,7 +70,7 @@
 				<p class="page-subtitle">Manage player power records in a spreadsheet-style table. Sheets can represent different dates or event rounds.</p>
 				<div id="hero-power-sheet-list" class="list-container"></div>
 				<section id="hero-power-workspace" class="hero-power-workspace hidden">
-					<div class="hero-power-workspace-head"><div><h2 id="hero-power-current-title">Sheet</h2><p id="hero-power-sheet-meta" class="page-subtitle"></p></div><div class="schedule-actions-buttons"><button class="btn-back" onclick="closeHeroPowerWorkspace()">Back to Sheets</button><button id="hero-power-import" class="btn-back hidden" onclick="document.getElementById('hero-power-import-file').click()">Import File</button><input id="hero-power-import-file" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" hidden onchange="handleHeroPowerImportFile(event)"><button id="hero-power-save" class="btn-apply hidden" onclick="saveHeroPowerRows()">Save Changes</button></div></div>
+					<div class="hero-power-workspace-head"><div><h2 id="hero-power-current-title">Sheet</h2><p id="hero-power-sheet-meta" class="page-subtitle"></p></div><div class="schedule-actions-buttons"><button class="btn-back" onclick="closeHeroPowerWorkspace()">Back to Sheets</button><button id="hero-power-import" class="btn-back hidden" onclick="document.getElementById('hero-power-import-file').click()">Import File</button><button id="hero-power-export" class="btn-back hidden" onclick="exportHeroPowerSheetXlsx()">Export XLSX</button><input id="hero-power-import-file" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" hidden onchange="handleHeroPowerImportFile(event)"><button id="hero-power-save" class="btn-apply hidden" onclick="saveHeroPowerRows()">Save Changes</button></div></div>
 					<div class="hero-power-table-wrap"><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th><th class="hidden" id="hero-power-actions-head">Action</th></tr></thead><tbody id="hero-power-rows"></tbody></table></div>
 					<div class="hero-power-bottom"><button id="hero-power-add-row" class="btn-back hidden" onclick="addHeroPowerRow()">+ Add Player Row</button><div id="hero-power-summary" class="hero-power-summary"></div></div>
 				</section>
