@@ -1267,7 +1267,8 @@ th.sortable:hover { color: #f1f5f9; }
 .hero-power-bottom { display:flex; flex-direction:column; gap:14px; margin-top:14px; }
 .hero-power-total { color:#cbd5e1; background:#20232d; border:1px solid #303542; border-radius:8px; padding:12px; }
 .hero-power-alliance-totals { display:flex; flex-wrap:wrap; align-items:center; gap:8px; color:#94a3b8; font-size:.85rem; }
-.hero-power-alliance-totals span { background:#20232d; padding:7px 10px; border-radius:7px; }
+.hero-power-alliance-totals span { background:var(--alliance-bg,#20232d); border:1px solid var(--alliance-fg,#303542); padding:7px 10px; border-radius:7px; }
+.hero-power-alliance-totals span i { color:var(--alliance-fg,#e2e8f0); font-style:normal; font-weight:700; }
 .hero-power-alliance-totals strong { color:#f8fafc; margin-left:5px; }
 @media(max-width:600px){ .hero-power-workspace-head .schedule-actions-buttons { width:100%; } .hero-power-workspace-head .schedule-actions-buttons button { flex:1; } }
 
@@ -1372,4 +1373,24 @@ th.sortable:hover { color: #f1f5f9; }
   .spreadsheet-footer-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
   .spreadsheet-footer-actions .btn-back { min-height:31px; padding:5px 3px; font-size:.65rem; line-height:1.1; }
   .spreadsheet-help { margin-top:4px; font-size:.61rem; line-height:1.15; flex:0 0 auto; }
+}
+
+
+/* V16: make spreadsheet columns occupy a real horizontal grid on mobile.
+   Keep the sheet wider than the viewport when needed so users can swipe sideways. */
+#spreadsheet-grid { display:block; width:max-content; min-width:100%; }
+.spreadsheet-grid-table { display:table; width:max-content !important; min-width:100%; table-layout:auto; }
+.spreadsheet-grid-table thead, .spreadsheet-grid-table tbody { display:table-row-group; }
+.spreadsheet-grid-table tr { display:table-row; }
+.spreadsheet-grid-table th, .spreadsheet-grid-table td { box-sizing:border-box; }
+.spreadsheet-grid-table td { min-width:110px; width:110px; max-width:220px; }
+.spreadsheet-grid-table td input.spreadsheet-cell { min-width:0; max-width:100%; }
+@media (max-width:650px) {
+  .spreadsheet-grid-wrap { width:100%; max-width:100%; overflow:auto; touch-action:pan-x pan-y; }
+  #spreadsheet-grid { width:max-content; min-width:100%; }
+  .spreadsheet-grid-table { width:max-content !important; min-width:100%; table-layout:auto; }
+  .spreadsheet-grid-table th:not(.spreadsheet-corner):not(.spreadsheet-row-head),
+  .spreadsheet-grid-table td { min-width:110px; width:110px; max-width:220px; }
+  .spreadsheet-grid-table th.spreadsheet-corner,
+  .spreadsheet-grid-table th.spreadsheet-row-head { min-width:38px; width:38px; max-width:38px; }
 }
