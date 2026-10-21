@@ -6,11 +6,12 @@
 		<title>3475 All Event Reports</title>
 		<meta name="description" content="3475 All Event report screenshot archive, organized by event and date range.">
 		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%E2%9A%94%EF%B8%8F%3C/text%3E%3C/svg%3E">
-		<link rel="stylesheet" href="style.css?v=3">
+		<link rel="stylesheet" href="style.css?v=4">
 
 		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 		<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-		<script src="spreadsheet-engine.js?v=1" defer></script>
+		<script src="spreadsheet-engine.js?v=2" defer></script>
+		<script src="spreadsheet-editor.js?v=3" defer></script>
 		<script src="events.js?v=5" defer></script>
 	</head>
 	<body>
@@ -66,11 +67,11 @@
 			<!-- HERO POWER SHEETS -->
 			<section id="hero-power-page" class="hidden">
 				<button class="btn-back" onclick="showEventMenu()">&lt; Back to Events</button>
-				<div class="schedule-actions"><h1 class="page-title" style="margin-bottom:0;">⚡ Hero Power Sheets</h1><button id="hero-power-add-sheet" class="btn-apply hidden" style="margin-bottom:0;" onclick="openHeroPowerSheetModal()">+ New Sheet</button></div>
+				<div class="schedule-actions"><h1 class="page-title" style="margin-bottom:0;">⚡ Hero Power Sheets</h1><div class="schedule-actions-buttons"><button class="btn-back" style="margin-bottom:0;" onclick="openSpreadsheetEditor()">Spreadsheet Editor</button><button id="hero-power-add-sheet" class="btn-apply hidden" style="margin-bottom:0;" onclick="openHeroPowerSheetModal()">+ New Sheet</button></div></div>
 				<p class="page-subtitle">Manage player power records in a spreadsheet-style table. Sheets can represent different dates or event rounds.</p>
 				<div id="hero-power-sheet-list" class="list-container"></div>
 				<section id="hero-power-workspace" class="hero-power-workspace hidden">
-					<div class="hero-power-workspace-head"><div><h2 id="hero-power-current-title">Sheet</h2><p id="hero-power-sheet-meta" class="page-subtitle"></p></div><div class="schedule-actions-buttons"><button class="btn-back" onclick="closeHeroPowerWorkspace()">Back to Sheets</button><button id="hero-power-import" class="btn-back hidden" onclick="document.getElementById('hero-power-import-file').click()">Import File</button><button id="hero-power-export" class="btn-back hidden" onclick="exportHeroPowerSheetXlsx()">Export XLSX</button><input id="hero-power-import-file" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" hidden onchange="handleHeroPowerImportFile(event)"><button id="hero-power-save" class="btn-apply hidden" onclick="saveHeroPowerRows()">Save Changes</button></div></div>
+					<div class="hero-power-workspace-head"><div><h2 id="hero-power-current-title">Sheet</h2><p id="hero-power-sheet-meta" class="page-subtitle"></p></div><div class="schedule-actions-buttons"><button class="btn-back" onclick="closeHeroPowerWorkspace()">Back to Sheets</button><button id="hero-power-import" class="btn-back hidden" onclick="document.getElementById('hero-power-import-file').click()">Import File</button><button id="hero-power-export" class="btn-back hidden" onclick="exportHeroPowerSheetXlsx()">Export XLSX</button><button class="btn-back" onclick="openSpreadsheetEditor()">Spreadsheet Editor</button><input id="hero-power-import-file" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" hidden onchange="handleHeroPowerImportFile(event)"><button id="hero-power-save" class="btn-apply hidden" onclick="saveHeroPowerRows()">Save Changes</button></div></div>
 					<div class="hero-power-table-wrap"><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th><th class="hidden" id="hero-power-actions-head">Action</th></tr></thead><tbody id="hero-power-rows"></tbody></table></div>
 					<div class="hero-power-bottom"><button id="hero-power-add-row" class="btn-back hidden" onclick="addHeroPowerRow()">+ Add Player Row</button><div id="hero-power-summary" class="hero-power-summary"></div></div>
 				</section>
@@ -116,6 +117,21 @@
 				<p id="screenshot-empty" class="page-subtitle hidden" style="margin-top: 20px;">No files uploaded for this date range yet.</p>
 			</section>
 		</main>
+
+		<!-- XLSX-LIKE SPREADSHEET EDITOR -->
+		<div id="spreadsheet-editor-modal" class="modal hidden spreadsheet-editor-modal">
+			<div class="modal-content spreadsheet-editor-content">
+				<div class="spreadsheet-editor-heading"><div><h2 class="modal-title">Spreadsheet Editor</h2><p class="page-subtitle">Edit cells, formulas, multiple sheets, and import/export XLSX files.</p></div><button class="close-modal" onclick="closeSpreadsheetEditor()" aria-label="Close spreadsheet editor">&times;</button></div>
+				<div class="spreadsheet-toolbar">
+					<label class="spreadsheet-file-button">Import XLSX / CSV<input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onchange="spreadsheetImportFile(event)" hidden></label>
+					<button class="btn-back" onclick="spreadsheetExportFile()">Export XLSX</button><button class="btn-back" onclick="spreadsheetSaveDraft()">Save Draft</button><span id="spreadsheet-status" class="spreadsheet-status">New workbook</span>
+				</div>
+				<div class="spreadsheet-formula-row"><input id="spreadsheet-name-box" aria-label="Cell address" value="A1" onchange="spreadsheetSelectCell(this.value)"><span class="spreadsheet-fx">fx</span><input id="spreadsheet-formula-input" aria-label="Cell value or formula" placeholder="Enter a value or formula, e.g. =SUM(B2:B10)" onkeydown="if(event.key==='Enter'){event.preventDefault();spreadsheetApplyFormula();}"><button class="btn-apply" onclick="spreadsheetApplyFormula()">Apply</button></div>
+				<div class="spreadsheet-grid-wrap"><div id="spreadsheet-grid"></div></div>
+				<div class="spreadsheet-editor-footer"><div class="spreadsheet-tabs" id="spreadsheet-tabs"></div><div class="spreadsheet-footer-actions"><button class="btn-back" onclick="spreadsheetNewSheet()">+ Sheet</button><button class="btn-back" onclick="spreadsheetRenameSheet()">Rename</button><button class="btn-back btn-danger" onclick="spreadsheetDeleteSheet()">Delete Sheet</button><button class="btn-back" onclick="spreadsheetAddRow()">Show More Rows</button><button class="btn-back" onclick="spreadsheetAddColumn()">Show More Columns</button></div></div>
+				<p id="spreadsheet-dimensions" class="spreadsheet-help">Paste tabular data directly from Excel or Google Sheets into a cell.</p>
+			</div>
+		</div>
 
 		<!-- CREATE HERO POWER SHEET -->
 		<div id="hero-power-sheet-modal" class="modal hidden">
