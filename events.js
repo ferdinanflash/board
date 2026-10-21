@@ -453,7 +453,7 @@ async function openHeroPowerSheet(id) {
     const client=getSupabase(); const sheet=currentHeroPowerSheets.find(x=>x.id===id); if(!sheet||!client)return;
     const {data,error}=await client.from('hero_power_entries').select('*').eq('sheet_id',id).order('sort_order',{ascending:true});
     if(error){showToast('Could not load sheet rows. Check the Hero Power SQL setup.','error');return;}
-    currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r,_source_name_label:r._source_name_label||(Number(r.source_name_col??r._source_name_col)===0?'Name#1':Number(r.source_name_col??r._source_name_col)===6?'Name#2':Number.isInteger(Number(r.source_name_col??r._source_name_col))?'Source column '+heroPowerColumnName(Number(r.source_name_col??r._source_name_col)):''),_source_name_col:r._source_name_col??r.source_name_col,_source_row:r._source_row??r.source_row,_source_alliance_col:r._source_alliance_col??r.source_alliance_col,_source_power_col:r._source_power_col??r.source_power_col})); heroPowerDirty=false;
+    currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r,_source_name_label:r._source_name_label||(Number(r.source_name_col??r._source_name_col)===0?'Name#1':Number(r.source_name_col??r._source_name_col)===6?'Name#2':Number.isInteger(Number(r.source_name_col??r._source_name_col))?'Source column '+heroPowerColumnName(Number(r.source_name_col??r._source_name_col)):''),_source_name_col:r._source_name_col??r.source_name_col,_source_row:r._source_row??r.source_row,_source_alliance_col:r._source_alliance_col??r.source_alliance_col,_source_power_col:r._source_power_col??r.source_power_col,_source_power_label:r._source_power_label||((Number(r.source_name_col??r._source_name_col)===6||Number(r.source_power_col??r._source_power_col)===8)?'Total Hero Power':'Hero Power')})); heroPowerDirty=false;
     document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
     document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
     document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-full-display')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
@@ -472,15 +472,32 @@ function exportHeroPowerSheetXlsx(){
 }
 
 function addHeroPowerRow(){if(!isAdmin)return; currentHeroPowerRows.push({name:'',alliance:'',hero_power:null}); heroPowerDirty=true; renderHeroPowerRows();}
-function updateHeroPowerCell(index,field,value){if(!isAdmin)return; currentHeroPowerRows[index][field]=field==='hero_power'?(value===''?null:Number(value)):value; heroPowerDirty=true;}
+function updateHeroPowerCell(index,field,value){if(!isAdmin)return; currentHeroPowerRows[index][field]=field==='hero_power'?(value===''?null:Number(value)):value; heroPowerDirty=true; renderHeroPowerSummary();}
 function removeHeroPowerRow(index){if(!isAdmin)return;currentHeroPowerRows.splice(index,1);heroPowerDirty=true;renderHeroPowerRows();}
 function renderHeroPowerRows(){
  const tbody=document.getElementById('hero-power-rows');
  tbody.innerHTML=currentHeroPowerRows.map((r,i)=>{const sourceName=r._source_name_label||(Number(r._source_name_col??r.source_name_col)===0?'Name#1':Number(r._source_name_col??r.source_name_col)===6?'Name#2':Number.isInteger(Number(r._source_name_col??r.source_name_col))?'Source '+heroPowerColumnName(Number(r._source_name_col??r.source_name_col)):'');const sourcePower=r._source_power_label||(sourceName==='Name#2'?'Total Hero Power':'Hero Power');return `<tr><td class="hp-row-number"><span class="hp-row-index">${i+1}</span>${sourceName?`<small class="hp-source-label"><span>${escapeHtml(sourceName)}</span><span>${escapeHtml(sourcePower)}</span></small>`:''}</td><td><input ${isAdmin?'':'disabled'} value="${escapeHtml(r.name||'')}" placeholder="Player name" onchange="updateHeroPowerCell(${i},'name',this.value)"></td><td><input ${isAdmin?'':'disabled'} value="${escapeHtml(r.alliance||'')}" placeholder="Alliance" onchange="updateHeroPowerCell(${i},'alliance',this.value)"></td><td><input ${isAdmin?'':'disabled'} type="number" min="0" step="1" value="${r.hero_power??''}" placeholder="0" onchange="updateHeroPowerCell(${i},'hero_power',this.value)"></td>${isAdmin?`<td><button class="hero-power-remove" onclick="removeHeroPowerRow(${i})" aria-label="Remove row">×</button></td>`:''}</tr>`}).join('');
  document.getElementById('hero-power-actions-head').classList.toggle('hidden',!isAdmin);
- const totals={}; currentHeroPowerRows.forEach(r=>{if(r.alliance&&Number(r.hero_power)>0)totals[r.alliance]=(totals[r.alliance]||0)+Number(r.hero_power)});
- const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
- document.getElementById('hero-power-summary').innerHTML=`<div class="hero-power-total">Players: <b>${currentHeroPowerRows.filter(r=>r.name).length}</b> · Total Power: <b>${currentHeroPowerRows.reduce((a,r)=>a+(Number(r.hero_power)||0),0).toLocaleString()}</b></div>${sorted.length?`<div class="hero-power-alliance-totals"><b>Alliance totals</b>${sorted.map(([a,n])=>`<span>${escapeHtml(a)} <strong>${n.toLocaleString()}</strong></span>`).join('')}</div>`:''}`;
+ renderHeroPowerSummary();
+}
+function heroPowerKind(row){
+ const label=String(row._source_power_label||'').toLowerCase();
+ const nameLabel=String(row._source_name_label||'').toLowerCase();
+ const nameCol=Number(row._source_name_col??row.source_name_col);
+ const powerCol=Number(row._source_power_col??row.source_power_col);
+ if(label.includes('total hero power')||nameLabel==='name#2'||nameCol===6||powerCol===8)return 'total';
+ return 'hero';
+}
+function renderHeroPowerSummary(){
+ const el=document.getElementById('hero-power-summary'); if(!el)return;
+ const buckets={hero:{sum:0,alliances:{}},total:{sum:0,alliances:{}}};
+ currentHeroPowerRows.forEach(r=>{
+  const kind=heroPowerKind(r), power=Number(r.hero_power)||0, bucket=buckets[kind];
+  bucket.sum+=power;
+  if(r.alliance&&power>0)bucket.alliances[r.alliance]=(bucket.alliances[r.alliance]||0)+power;
+ });
+ const allianceMarkup=(label,values)=>{const sorted=Object.entries(values).sort((a,b)=>b[1]-a[1]);return sorted.length?`<div class="hero-power-alliance-totals"><b>${label}</b>${sorted.map(([a,n])=>`<span>${escapeHtml(a)} <strong>${n.toLocaleString()}</strong></span>`).join('')}</div>`:''};
+ el.innerHTML=`<div class="hero-power-total">Players: <b>${currentHeroPowerRows.filter(r=>r.name).length}</b> · Hero Power: <b>${buckets.hero.sum.toLocaleString()}</b> · Total Hero Power: <b>${buckets.total.sum.toLocaleString()}</b></div>${allianceMarkup('Alliance totals · Hero Power',buckets.hero.alliances)}${allianceMarkup('Alliance totals · Total Hero Power',buckets.total.alliances)}`;
 }
 // Import spreadsheet-like files (Excel, CSV, TSV, TXT). Detect headers anywhere
 // in the worksheet and support multiple Name/Power tables placed side-by-side.
