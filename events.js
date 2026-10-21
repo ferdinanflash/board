@@ -77,6 +77,7 @@ let currentScreenshots = [];   // rows from event_screenshots for currentDuratio
 let currentLightboxShotId = null;
 let currentHeroPowerSheets = [];
 let currentHeroPowerSheet = null;
+let pendingHeroPowerImport = [];
 let currentHeroPowerRows = [];
 let heroPowerDirty = false;
 
@@ -422,7 +423,7 @@ async function openHeroPowerSheet(id) {
     currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r})); heroPowerDirty=false;
     document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
     document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
-    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
+    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
     renderHeroPowerRows();
 }
 function closeHeroPowerWorkspace(){ currentHeroPowerSheet=null; document.getElementById('hero-power-workspace').classList.add('hidden'); document.getElementById('hero-power-sheet-list').classList.remove('hidden'); }
@@ -437,6 +438,33 @@ function renderHeroPowerRows(){
  const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]);
  document.getElementById('hero-power-summary').innerHTML=`<div class="hero-power-total">Players: <b>${currentHeroPowerRows.filter(r=>r.name).length}</b> · Total Power: <b>${currentHeroPowerRows.reduce((a,r)=>a+(Number(r.hero_power)||0),0).toLocaleString()}</b></div>${sorted.length?`<div class="hero-power-alliance-totals"><b>Alliance totals</b>${sorted.map(([a,n])=>`<span>${escapeHtml(a)} <strong>${n.toLocaleString()}</strong></span>`).join('')}</div>`:''}`;
 }
+// Import spreadsheet-like files (Excel, CSV, TSV, TXT)
+function parseHeroPowerDelimited(text) {
+ const first=(text.split(/\r?\n/).find(x=>x.trim())||''); const delim=(first.match(/\t/g)||[]).length>(first.match(/,/g)||[]).length?'\t':',';
+ const rows=[]; let row=[], cell='', quoted=false;
+ for(let i=0;i<text.length;i++){const c=text[i]; if(c==='"'&&quoted&&text[i+1]==='"'){cell+='"';i++;}else if(c==='"'){quoted=!quoted;}else if(c===delim&&!quoted){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);row=[];cell='';}else cell+=c;}
+ if(cell.length||row.length){row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);} return rows;
+}
+function heroPowerHeaderIndex(headers, candidates){return headers.findIndex(h=>candidates.includes(String(h||'').toLowerCase().replace(/[^a-z]/g,'')));}
+async function handleHeroPowerImportFile(event){
+ if(!isAdmin||!currentHeroPowerSheet)return; const file=event.target.files?.[0];event.target.value='';if(!file)return;
+ try{
+  let matrix; const ext=file.name.split('.').pop().toLowerCase();
+  if(['xlsx','xls'].includes(ext)){if(!window.XLSX)throw new Error('Excel reader is not ready. Refresh and try again.');const buf=await file.arrayBuffer();const wb=XLSX.read(buf,{type:'array'});matrix=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});}
+  else matrix=parseHeroPowerDelimited(await file.text());
+  matrix=matrix.filter(r=>Array.isArray(r)&&r.some(v=>String(v??'').trim()));if(!matrix.length)throw new Error('No data rows found.');
+  let headers=matrix[0].map(v=>String(v??'').trim());let ni=heroPowerHeaderIndex(headers,['name','playername','player','username']);let ai=heroPowerHeaderIndex(headers,['alliance','alliancecode','tag']);let pi=heroPowerHeaderIndex(headers,['heropower','power','totalheropower']);
+  if(ni<0||pi<0){ni=0;ai=1;pi=2;}
+  else matrix=matrix.slice(1);
+  pendingHeroPowerImport=matrix.map(r=>({name:String(r[ni]??'').trim(),alliance:ai>=0?String(r[ai]??'').trim():'',hero_power:Number(String(r[pi]??'').replace(/[,_\s]/g,''))||0})).filter(r=>r.name);
+  if(!pendingHeroPowerImport.length)throw new Error('Could not find player rows. Check the Name and Hero Power columns.');
+  document.getElementById('hero-power-import-preview').innerHTML=`<p><b>${pendingHeroPowerImport.length}</b> player rows detected from <b>${escapeHtml(file.name)}</b></p><table class="hero-power-table"><thead><tr><th>#</th><th>Player Name</th><th>Alliance</th><th>Hero Power</th></tr></thead><tbody>${pendingHeroPowerImport.slice(0,12).map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.alliance)}</td><td>${r.hero_power.toLocaleString()}</td></tr>`).join('')}</tbody></table>${pendingHeroPowerImport.length>12?`<p>Showing first 12 rows of ${pendingHeroPowerImport.length}.</p>`:''}`;
+  document.getElementById('hero-power-import-modal').classList.remove('hidden');
+ }catch(err){showToast(err.message||'Could not read this file','error');}
+}
+function closeHeroPowerImportPreview(){document.getElementById('hero-power-import-modal').classList.add('hidden');pendingHeroPowerImport=[];}
+function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHeroPowerImport.length)return;currentHeroPowerRows=pendingHeroPowerImport.map(r=>({...r}));heroPowerDirty=true;closeHeroPowerImportPreview();renderHeroPowerRows();showToast('Import preview applied. Click Save Changes to store it.','success');}
+
 async function saveHeroPowerRows(){
  if(!isAdmin||!currentHeroPowerSheet)return;
  const rows=currentHeroPowerRows.filter(r=>String(r.name||'').trim()).map((r,i)=>({sheet_id:currentHeroPowerSheet.id,name:r.name.trim(),alliance:(r.alliance||'').trim()||null,hero_power:Number(r.hero_power)||0,sort_order:i}));
