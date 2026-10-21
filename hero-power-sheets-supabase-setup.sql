@@ -28,6 +28,9 @@ create policy hero_power_sheets_public_read on public.hero_power_sheets
 drop policy if exists hero_power_sheets_staff_insert on public.hero_power_sheets;
 create policy hero_power_sheets_staff_insert on public.hero_power_sheets
   for insert to authenticated with check (true);
+drop policy if exists hero_power_sheets_staff_delete on public.hero_power_sheets;
+create policy hero_power_sheets_staff_delete on public.hero_power_sheets
+  for delete to authenticated using (true);
 
 drop policy if exists hero_power_entries_public_read on public.hero_power_entries;
 create policy hero_power_entries_public_read on public.hero_power_entries

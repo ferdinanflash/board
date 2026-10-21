@@ -418,8 +418,9 @@ async function deleteHeroPowerSheet(id) {
     if (!client) return;
     const { error: rowsError } = await client.from('hero_power_entries').delete().eq('sheet_id', id);
     if (rowsError) { showToast('Could not delete player rows. Check Supabase permissions.', 'error'); return; }
-    const { error } = await client.from('hero_power_sheets').delete().eq('id', id);
-    if (error) { showToast('Could not delete sheet. Check Supabase permissions.', 'error'); return; }
+    const { data: deletedSheets, error } = await client.from('hero_power_sheets').delete().eq('id', id).select('id');
+    if (error) { showToast('Could not delete sheet. Check Supabase permissions and run the updated Hero Power SQL setup.', 'error'); return; }
+    if (!deletedSheets || deletedSheets.length === 0) { showToast('Supabase did not delete this sheet. Run the updated hero-power-sheets-supabase-setup.sql to enable sheet deletion.', 'error'); await loadHeroPowerSheets(); return; }
     currentHeroPowerSheets = currentHeroPowerSheets.filter(item => String(item.id) !== String(id));
     renderHeroPowerSheets();
     showToast('Sheet deleted', 'success');
@@ -430,7 +431,20 @@ async function createHeroPowerSheet() {
     if (!isAdmin) return;
     const name=document.getElementById('hero-power-sheet-name').value.trim(), date=document.getElementById('hero-power-sheet-date').value;
     if (!name) { showToast('Enter a sheet name', 'warning'); return; }
-    const client=getSupabase(); const {data,error}=await client.from('hero_power_sheets').insert({name,sheet_date:date||null,created_by:currentStaffUsername}).select().single();
+    const client=getSupabase();
+    // Prevent accidental duplicate sheets when the same name/date is submitted again.
+    let existingQuery = client.from('hero_power_sheets').select('*').eq('name', name);
+    existingQuery = date ? existingQuery.eq('sheet_date', date) : existingQuery.is('sheet_date', null);
+    const { data: existing, error: lookupError } = await existingQuery.order('created_at', {ascending:false}).limit(1);
+    if (lookupError) { showToast('Could not check for an existing sheet. Try again.', 'error'); return; }
+    if (existing && existing.length) {
+        closeHeroPowerSheetModal();
+        await loadHeroPowerSheets();
+        showToast('A sheet with this name and date already exists. Opening the existing sheet.', 'warning');
+        openHeroPowerSheet(existing[0].id);
+        return;
+    }
+    const {data,error}=await client.from('hero_power_sheets').insert({name,sheet_date:date||null,created_by:currentStaffUsername}).select().single();
     if(error){showToast('Failed to create sheet','error');return;}
     closeHeroPowerSheetModal(); await loadHeroPowerSheets(); openHeroPowerSheet(data.id);
 }
