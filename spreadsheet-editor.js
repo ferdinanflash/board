@@ -24,6 +24,7 @@
     return { cols: Math.min(78, Math.max(COLS, mc + 2)), rows: Math.min(300, Math.max(ROWS, mr + 2)) };
   }
   function openSpreadsheetEditor() {
+    if (typeof isAdmin !== 'undefined' && !isAdmin) { alert('Spreadsheet Editor is only available to Alliance Staff. Please sign in first.'); return; }
     ensureWorkbook(); $('spreadsheet-editor-modal').classList.remove('hidden');
     if (!dirty && workbookSheets.length === 1 && !Object.keys(current().model.cells).length) loadLocalDraft();
     renderTabs(); renderGrid(); updateFormulaBar();
@@ -100,7 +101,7 @@
     try {
       const buf = await file.arrayBuffer();
       if (/\.(csv|tsv|txt)$/i.test(file.name)) {
-        const raw = new TextDecoder().decode(buf), delim = /\.tsv$/i.test(file.name) ? '\t' : (raw.includes('\t') && !raw.includes(',') ? '\t' : ',');
+        const raw = new TextDecoder('utf-8').decode(buf).replace(/^\uFEFF/,''), delim = /\.tsv$/i.test(file.name) ? '\t' : (raw.includes('\t') && !raw.includes(',') ? '\t' : ',');
         visibleRows=ROWS; visibleCols=COLS; workbookSheets = [{ name: file.name.replace(/\.[^.]+$/,'').slice(0,31) || 'Sheet1', model: window.SheetEngine.modelFromMatrix(window.SheetEngine.parseDelimited(raw,delim)) }];
       } else {
         if (!window.XLSX) throw new Error('XLSX library did not load. Check your internet connection and reload the page.');
@@ -119,6 +120,14 @@
       workbookSheets.forEach((s,i)=>window.XLSX.utils.book_append_sheet(wb,window.SheetEngine.xlsxSheetFromModel(s.model,window.XLSX),(s.name||`Sheet${i+1}`).slice(0,31)));
       window.XLSX.writeFile(wb,'3475-spreadsheet.xlsx'); dirty=false; renderTabs(); $('spreadsheet-status').textContent='Exported 3475-spreadsheet.xlsx';
     } catch(err) { alert('Could not export XLSX: '+(err?.message||err)); }
+  }
+  function exportCsv() {
+    try {
+      const s=workbookSheets[activeSheet]; if(!s) return;
+      const base=(($('spreadsheet-workbook-title').value||'3475-spreadsheet').trim()+(workbookSheets.length>1?'-'+(s.name||'Sheet'+(activeSheet+1)):'')).replace(/[\\/:*?"<>|]+/g,'_');
+      window.SheetEngine.downloadCsv(base+'.csv',window.SheetEngine.modelToMatrix(s.model));
+      $('spreadsheet-status').textContent=`Exported ${base}.csv (UTF-8 BOM, sheet "${s.name}")`;
+    } catch(err) { alert('Could not export CSV: '+(err?.message||err)); }
   }
   function newSheet() {
     visibleRows=ROWS; visibleCols=COLS;
@@ -233,6 +242,7 @@
   window.spreadsheetApplyFormula=applyFormulaBar;
   window.spreadsheetImportFile=importFile;
   window.spreadsheetExportFile=exportFile;
+  window.spreadsheetExportCsv=exportCsv;
   window.spreadsheetNewSheet=newSheet;
   window.spreadsheetRenameSheet=renameSheet;
   window.spreadsheetDeleteSheet=removeSheet;

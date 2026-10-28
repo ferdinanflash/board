@@ -52,3 +52,18 @@ alter table public.hero_power_entries add column if not exists source_row intege
 alter table public.hero_power_entries add column if not exists source_name_col integer;
 alter table public.hero_power_entries add column if not exists source_alliance_col integer;
 alter table public.hero_power_entries add column if not exists source_power_col integer;
+
+-- ============================================================
+-- STAFF-ONLY LOCK: Hero Power data is readable only by signed-in
+-- alliance staff (the UI menu is hidden for guests, this enforces it
+-- on the database side). Run this block once; it is safe to re-run.
+-- ============================================================
+drop policy if exists hero_power_sheets_public_read on public.hero_power_sheets;
+drop policy if exists hero_power_sheets_staff_read on public.hero_power_sheets;
+create policy hero_power_sheets_staff_read on public.hero_power_sheets
+  for select to authenticated using (true);
+
+drop policy if exists hero_power_entries_public_read on public.hero_power_entries;
+drop policy if exists hero_power_entries_staff_read on public.hero_power_entries;
+create policy hero_power_entries_staff_read on public.hero_power_entries
+  for select to authenticated using (true);

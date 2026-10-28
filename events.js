@@ -158,6 +158,8 @@ function updateAdminUI() {
     document.getElementById('hero-power-add-sheet')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('hero-power-save')?.classList.toggle('hidden', !isAdmin);
     document.getElementById('hero-power-add-row')?.classList.toggle('hidden', !isAdmin);
+    renderEventTypeList();
+    if (!isAdmin) leaveHeroPowerIfLocked();
     if (currentLeaderboardPlayers.length) renderLeaderboardTables();
 
     const storageBar = document.getElementById('admin-storage-bar');
@@ -356,7 +358,8 @@ function renderEventTypeList() {
     `;
 
     const heroPowerItemHtml = `<div class="list-item" onclick="showHeroPowerPage()" role="button" tabindex="0" aria-label="${escapeHtml(HERO_POWER_MENU_ITEM.label)}"><span>${HERO_POWER_MENU_ITEM.icon} ${escapeHtml(HERO_POWER_MENU_ITEM.label)}</span><span class="arrow">&gt;</span></div>`;
-    container.innerHTML = eventItemsHtml + leaderboardItemHtml + heroPowerItemHtml;
+    // Hero Power Sheets is staff-only: the menu entry is not rendered for guests.
+    container.innerHTML = eventItemsHtml + leaderboardItemHtml + (isAdmin ? heroPowerItemHtml : '');
 }
 
 function selectEventType(key) {
@@ -390,7 +393,20 @@ function showEventMenu() {
 }
 
 // ================= HERO POWER SHEETS =================
+function leaveHeroPowerIfLocked() {
+    if (isAdmin) return;
+    currentHeroPowerSheet = null; currentHeroPowerSheets = []; currentHeroPowerRows = [];
+    document.getElementById('hero-power-workspace')?.classList.add('hidden');
+    document.getElementById('hero-power-import-modal')?.classList.add('hidden');
+    document.getElementById('hero-power-full-display-modal')?.classList.add('hidden');
+    document.getElementById('hero-power-sheet-modal')?.classList.add('hidden');
+    if (typeof closeSpreadsheetEditor === 'function' && !document.getElementById('hero-power-page')?.classList.contains('hidden')) {
+        try { closeSpreadsheetEditor(); } catch (e) {}
+    }
+    if (!document.getElementById('hero-power-page')?.classList.contains('hidden')) showEventMenu();
+}
 function showHeroPowerPage() {
+    if (!isAdmin) { showToast('Hero Power Sheets is only available to Alliance Staff. Please sign in.', 'warning'); return; }
     ['event-menu-page','event-duration-page','event-gallery-page','leaderboard-page'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     document.getElementById('hero-power-page').classList.remove('hidden');
     document.getElementById('hero-power-workspace').classList.add('hidden');
@@ -399,6 +415,7 @@ function showHeroPowerPage() {
     loadHeroPowerSheets();
 }
 async function loadHeroPowerSheets() {
+    if (!isAdmin) return;
     const client = getSupabase(); if (!client) return;
     const { data, error } = await client.from('hero_power_sheets').select('*').order('sheet_date', {ascending:false}).order('created_at', {ascending:false});
     if (error) { showToast('Could not load Hero Power sheets. Run hero-power-sheets-supabase-setup.sql first.', 'error'); return; }
@@ -450,17 +467,28 @@ async function createHeroPowerSheet() {
     closeHeroPowerSheetModal(); await loadHeroPowerSheets(); openHeroPowerSheet(data.id);
 }
 async function openHeroPowerSheet(id) {
+    if (!isAdmin) return;
     const client=getSupabase(); const sheet=currentHeroPowerSheets.find(x=>x.id===id); if(!sheet||!client)return;
     const {data,error}=await client.from('hero_power_entries').select('*').eq('sheet_id',id).order('sort_order',{ascending:true});
     if(error){showToast('Could not load sheet rows. Check the Hero Power SQL setup.','error');return;}
     currentHeroPowerSheet=sheet; currentHeroPowerRows=(data||[]).map(r=>({...r,_source_name_label:r._source_name_label||(Number(r.source_name_col??r._source_name_col)===0?'Name#1':Number(r.source_name_col??r._source_name_col)===6?'Name#2':Number.isInteger(Number(r.source_name_col??r._source_name_col))?'Source column '+heroPowerColumnName(Number(r.source_name_col??r._source_name_col)):''),_source_name_col:r._source_name_col??r.source_name_col,_source_row:r._source_row??r.source_row,_source_alliance_col:r._source_alliance_col??r.source_alliance_col,_source_power_col:r._source_power_col??r.source_power_col,_source_power_label:r._source_power_label||((Number(r.source_name_col??r._source_name_col)===6||Number(r.source_power_col??r._source_power_col)===8)?'Total Hero Power':'Hero Power')})); heroPowerDirty=false;
     document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
     document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
-    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-full-display')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
+    document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-full-display')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export-csv')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
     renderHeroPowerRows();
 }
 function closeHeroPowerWorkspace(){ currentHeroPowerSheet=null; document.getElementById('hero-power-workspace').classList.add('hidden'); document.getElementById('hero-power-sheet-list').classList.remove('hidden'); }
+function exportHeroPowerSheetCsv(){
+ if(!isAdmin)return;
+ if(!currentHeroPowerSheet){showToast('Open a Hero Power sheet first','warning');return;}
+ const rows=[['Player Name','Alliance','Hero Power']];
+ currentHeroPowerRows.forEach(r=>rows.push([r.name||'',r.alliance||'',Number(r.hero_power)||0]));
+ const base=String(currentHeroPowerSheet.name||'hero-power').replace(/[^a-z0-9-_]+/gi,'_');
+ SheetEngine.downloadCsv(`${base}.csv`,rows);
+ showToast('CSV exported (UTF-8 with BOM, opens correctly in Excel on Windows)','success');
+}
 function exportHeroPowerSheetXlsx(){
+ if(!isAdmin)return;
  if(!currentHeroPowerSheet){showToast('Open a Hero Power sheet first','warning');return;}
  if(!window.XLSX||!window.SheetEngine){showToast('Spreadsheet engine is not ready. Refresh the page and try again.','error');return;}
  const model=new SheetEngine.Model();
@@ -649,7 +677,7 @@ async function handleHeroPowerImportFile(event){
    for(const sheetName of wb.SheetNames){const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:true,blankrows:false});const parsed=heroPowerRowsFromMatrix(rows);if(parsed.length>detected.length)detected=parsed;}
    pendingHeroPowerImport=detected;
   } else {
-   matrix=parseHeroPowerDelimited(await file.text());
+   matrix=parseHeroPowerDelimited((await file.text()).replace(/^\uFEFF/,''));
    matrix=matrix.filter(r=>Array.isArray(r)&&r.some(v=>String(v??'').trim()));
    pendingHeroPowerImport=heroPowerRowsFromMatrix(matrix);
   }
