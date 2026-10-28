@@ -28,6 +28,22 @@ evaluate(formula) {
  const ast = typeof formula === 'string' ? parseFormula(formula) : formula;
  const scalar = n => { const v = ev(n); if (Array.isArray(v)) throw new FormulaError('#VALUE!'); return v; };
  const rangeVals = rg => { const out=[]; for(let r=rg.r1;r<=Math.min(rg.r2,MAX_ROWS-1);r++) for(let c=rg.c1;c<=Math.min(rg.c2,MAX_COLS-1);c++) out.push(this.getValue(c,r)); return out; };
+
+ // Excel-style criteria: 5, "ZXC", ">100", "<>CAT", "=x", wildcards * and ?; text matches case-insensitively.
+ const critTest = crit => {
+  let op='=', val=crit;
+  if(typeof crit==='string'){ const m=/^(<=|>=|<>|=|<|>)(.*)$/.exec(crit); if(m){ op=m[1]; val=m[2]; } }
+  const numVal=typeof val==='number'?val:(typeof val==='string'&&numRe.test(val.trim())?+val:null);
+  const rx=(numVal===null&&typeof val==='string'&&/[*?]/.test(val))?new RegExp('^'+val.replace(/[.+^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*').replace(/\?/g,'.')+'$','i'):null;
+  return cell=>{
+   if(cell instanceof FormulaError) return false;
+   let eq;
+   if(numVal!==null){ const cn=typeof cell==='number'?cell:(typeof cell==='string'&&numRe.test(cell.trim())?+cell:null); if(cn===null) return op==='<>'; switch(op){case'=':return cn===numVal;case'<>':return cn!==numVal;case'<':return cn<numVal;case'>':return cn>numVal;case'<=':return cn<=numVal;case'>=':return cn>=numVal;} }
+   const cs=cell==null?'':String(cell); eq=rx?rx.test(cs):cs.toLowerCase()===String(val??'').toLowerCase();
+   if(op==='=') return eq; if(op==='<>') return !eq;
+   const a=cs.toLowerCase(), b=String(val).toLowerCase(); return op==='<'?a<b:op==='>'?a>b:op==='<='?a<=b:a>=b;
+  };
+ };
  const ev = n => {
   if(!n) return null;
   switch(n.t) {
@@ -75,6 +91,30 @@ evaluate(formula) {
      case 'RIGHT': { const count=Math.max(0,toNum(args[1]??1)); return count===0?'':text(args[0]).slice(-count); }
      case 'ROW': { const q=n.a[0]&&n.a[0].v?parseRef(n.a[0].v.replace(/\$/g,'')):null; return q?q.r+1:1; }
      case 'COLUMN': { const q=n.a[0]&&n.a[0].v?parseRef(n.a[0].v.replace(/\$/g,'')):null; return q?q.c+1:1; }
+     // ---- conditional / lookup functions (SUMIF family, as in Excel) ----
+     case 'SUMIF': case 'AVERAGEIF': case 'COUNTIF': {
+      const rng=args[0]; if(!Array.isArray(rng)||args.length<2) throw new FormulaError('#VALUE!');
+      const test=critTest(args[1]), tgt=args[2]===undefined?rng:(Array.isArray(args[2])?args[2]:[args[2]]);
+      let sum=0,cnt=0; rng.forEach((v,i)=>{ if(test(v)){ cnt++; const t=tgt[i]; if(typeof t==='number') sum+=t; else if(typeof t==='string'&&numRe.test(t.trim())) sum+=+t; } });
+      if(n.v==='COUNTIF') return cnt;
+      if(n.v==='AVERAGEIF'){ if(!cnt) throw new FormulaError('#DIV/0!'); return sum/cnt; }
+      return sum;
+     }
+     case 'SUMIFS': case 'COUNTIFS': case 'AVERAGEIFS': {
+      const isSum=n.v!=='COUNTIFS', sumRng=isSum?args[0]:null, pairs=[]; const start=isSum?1:0;
+      if(isSum&&!Array.isArray(sumRng)) throw new FormulaError('#VALUE!');
+      if((args.length-start)<2||(args.length-start)%2) throw new FormulaError('#VALUE!');
+      for(let i=start;i<args.length;i+=2){ if(!Array.isArray(args[i])) throw new FormulaError('#VALUE!'); pairs.push([args[i],critTest(args[i+1])]); }
+      const len=pairs[0][0].length; if(pairs.some(([r])=>r.length!==len)||(isSum&&sumRng.length!==len)) throw new FormulaError('#VALUE!');
+      let sum=0,cnt=0; for(let i=0;i<len;i++){ if(pairs.every(([r,t])=>t(r[i]))){ cnt++; if(isSum){ const v=sumRng[i]; if(typeof v==='number') sum+=v; else if(typeof v==='string'&&numRe.test(v.trim())) sum+=+v; } } }
+      if(n.v==='COUNTIFS') return cnt; if(n.v==='AVERAGEIFS'){ if(!cnt) throw new FormulaError('#DIV/0!'); return sum/cnt; } return sum;
+     }
+     case 'SUMPRODUCT': { const arrs=args.map(a=>Array.isArray(a)?a:[a]); const len=arrs[0].length; if(arrs.some(a=>a.length!==len)) throw new FormulaError('#VALUE!'); let t=0; for(let i=0;i<len;i++){ let m=1; for(const a of arrs){ const v=a[i]; m*=typeof v==='number'?v:(typeof v==='string'&&numRe.test(v.trim())?+v:0); } t+=m; } return t; }
+     case 'LARGE': case 'SMALL': { const k=Math.trunc(toNum(args[1])); const arr=(Array.isArray(args[0])?args[0]:[args[0]]).filter(x=>typeof x==='number').sort((a,b)=>n.v==='LARGE'?b-a:a-b); if(k<1||k>arr.length) throw new FormulaError('#NUM!'); return arr[k-1]; }
+     case 'MEDIAN': { if(!nums.length) throw new FormulaError('#NUM!'); const a=nums.slice().sort((x,y)=>x-y), m=a.length>>1; return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+     case 'RANK': { const v=toNum(args[0]), arr=(Array.isArray(args[1])?args[1]:[]).filter(x=>typeof x==='number'); if(!arr.includes(v)) throw new FormulaError('#N/A'); const asc=args[2]!==undefined&&toNum(args[2])!==0; return 1+arr.filter(x=>asc?x<v:x>v).length; }
+     case 'ROUNDUP': case 'ROUNDDOWN': { const d=Math.trunc(toNum(args[1]??0)), f=Math.pow(10,d), x=toNum(args[0]); const r=Math.abs(x)*f; const out=(n.v==='ROUNDUP'?Math.ceil(r-1e-9):Math.floor(r+1e-9))/f; return x<0?-out:out; }
+     case 'MATCH': { const arr=Array.isArray(args[1])?args[1]:[args[1]], t=args[0], mt=args[2]===undefined?1:toNum(args[2]); if(mt===0){ const i=arr.findIndex(x=>typeof x==='string'&&typeof t==='string'?x.toLowerCase()===t.toLowerCase():x===t); if(i<0) throw new FormulaError('#N/A'); return i+1; } let best=-1; arr.forEach((x,i)=>{ if(typeof x===typeof t&&(mt>0?x<=t:x>=t)) best=i; }); if(best<0) throw new FormulaError('#N/A'); return best+1; }
      default: throw new FormulaError('#NAME?');
     }
    }
