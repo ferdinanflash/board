@@ -1481,16 +1481,15 @@ th.sortable:hover { color: #f1f5f9; }
 .hp-row input.hp-alliance:disabled { padding-left:6px; }
 
 /* Hero Power rewards (Top 15 / Top 20) */
-.hp-rewards { margin:0 0 14px; }
-.hp-rw-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
-.hp-rw-block { background:#191c24; border:1px solid #303542; border-radius:12px; padding:12px; min-width:0; }
-.hp-rw-block h4 { margin:0 0 8px; color:#f8fafc; font-size:1rem; }
-.hp-rw-scroll { overflow-x:auto; }
-.hp-rw-table { width:100%; border-collapse:collapse; font-size:.8rem; color:#e2e8f0; }
-.hp-rw-table th { text-align:right; color:#94a3b8; font-weight:600; font-size:.68rem; text-transform:uppercase; letter-spacing:.03em; padding:6px 6px; border-bottom:1px solid #303542; vertical-align:bottom; }
-.hp-rw-table th:first-child, .hp-rw-table td:first-child { text-align:left; }
-.hp-rw-table td { text-align:right; padding:7px 6px; border-bottom:1px solid #262b36; white-space:nowrap; }
-.hp-rw-table td.hp-rw-alliance { border-left:4px solid #475569; font-weight:700; padding-left:8px; }
-.hp-rw-table td b { color:#f8fafc; }
-.hp-rw-table tfoot td { font-weight:700; color:#f8fafc; border-bottom:0; border-top:1px solid #3a4050; }
-.hp-rw-note { margin:8px 2px 0; font-size:.75rem; }
+.hp-rewards { margin:0 0 12px; }
+.hp-rw-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
+.hp-rw-block { background:#191c24; border:1px solid #303542; border-radius:10px; padding:8px 8px 6px; min-width:0; }
+.hp-rw-block h4 { margin:0 0 4px 2px; color:#f8fafc; font-size:.85rem; font-weight:700; }
+.hp-rw-row { display:grid; grid-template-columns:.8fr 1.5fr .75fr .95fr 1fr; gap:4px; align-items:center; padding:3px 4px; font-size:.72rem; line-height:1.2; color:#e2e8f0; border-top:1px solid #262b36; }
+.hp-rw-row > * { text-align:right; min-width:0; }
+.hp-rw-row > :first-child { text-align:left; }
+.hp-rw-row b { color:#f8fafc; font-weight:700; }
+.hp-rw-head { border-top:0; color:#94a3b8; font-size:.58rem; font-weight:600; text-transform:uppercase; letter-spacing:.02em; align-items:end; }
+.hp-rw-name { border-left:3px solid #475569; padding-left:5px; font-weight:700; color:#f8fafc; }
+.hp-rw-foot { border-top:1px solid #3a4050; font-weight:700; color:#f8fafc; }
+.hp-rw-note { margin:6px 2px 0; font-size:.68rem; }

@@ -622,26 +622,30 @@ function heroPowerTopTotals(kind,limit){
  const top=currentHeroPowerRows.filter(r=>heroPowerKind(r)===kind&&r.name&&r.alliance&&Number(r.hero_power)>0).slice().sort((a,b)=>(Number(b.hero_power)||0)-(Number(a.hero_power)||0)).slice(0,limit);
  const totals={};top.forEach(r=>{const a=String(r.alliance).trim();totals[a]=(totals[a]||0)+(Number(r.hero_power)||0);});return totals;
 }
+const HERO_POWER_DEFAULT_ALLOCATION=[9,9,4,4,4];
 function renderHeroPowerRewards(){
  const el=document.getElementById('hero-power-rewards'); if(!el)return;
  const names=[...new Set(currentHeroPowerRows.map(r=>String(r.alliance||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
  if(!names.length){el.innerHTML='';return;}
  const palette=['#4ade80','#c4b5fd','#fdba74','#7dd3fc','#f9a8d4','#fde047','#67e8f9','#fca5a5','#cbd5e1','#bef264'];
  const colorOf=a=>palette[names.indexOf(a)%palette.length];
- const linked=!!(currentHeroPowerSheet&&currentHeroPowerSheet.source_workbook_id);
+ let usedDefault=false;
  const block=(limit,key)=>{
-  const totals=heroPowerTopTotals('total',limit), sum=Object.values(totals).reduce((t,n)=>t+n,0), alloc=heroPowerAllocations[key];
+  const totals=heroPowerTopTotals('total',limit), sum=Object.values(totals).reduce((t,n)=>t+n,0), linkedAlloc=heroPowerAllocations[key];
   const list=names.slice().sort((a,b)=>(totals[b]||0)-(totals[a]||0)||a.localeCompare(b));
-  let rewardSum=0,allocSum=0,allocAny=false;
-  const rows=list.map(a=>{
+  let rewardSum=0,allocSum=0;
+  const rows=list.map((a,rank)=>{
    const t=totals[a]||0, share=sum?t/sum:0, reward=share*HERO_POWER_REWARD_POOL; rewardSum+=reward;
-   const al=alloc&&Object.prototype.hasOwnProperty.call(alloc,a.toUpperCase())?alloc[a.toUpperCase()]:null; if(al!==null){allocSum+=al;allocAny=true;}
-   return `<tr><td class="hp-rw-alliance" style="border-left-color:${colorOf(a)}">${escapeHtml(a)}</td><td>${t.toLocaleString('en-US')}</td><td>${(share*100).toFixed(2)}%</td><td><b>${reward.toFixed(2)}</b></td><td><b>${al===null?'—':al}</b></td></tr>`;
+   let al;
+   if(linkedAlloc&&Object.prototype.hasOwnProperty.call(linkedAlloc,a.toUpperCase()))al=linkedAlloc[a.toUpperCase()];
+   else{al=HERO_POWER_DEFAULT_ALLOCATION[rank]||0;usedDefault=true;}
+   allocSum+=al;
+   return `<div class="hp-rw-row"><span class="hp-rw-name" style="border-left-color:${colorOf(a)}">${escapeHtml(a)}</span><span>${t.toLocaleString('en-US')}</span><span>${(share*100).toFixed(1)}%</span><b>${reward.toFixed(2)}</b><b>${al}</b></div>`;
   }).join('');
-  return `<div class="hp-rw-block"><h4>Top ${limit} · Rewards</h4><div class="hp-rw-scroll"><table class="hp-rw-table"><thead><tr><th>Alliance</th><th>Total Hero Power</th><th>Share</th><th>Reward based on %</th><th>Reward Share Fortress (Allocated)</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>Total</td><td>${sum.toLocaleString('en-US')}</td><td>${sum?'100.00%':'0.00%'}</td><td>${rewardSum.toFixed(2)}</td><td>${allocAny?allocSum:'—'}</td></tr></tfoot></table></div></div>`;
+  return `<div class="hp-rw-block"><h4>Top ${limit} · Rewards</h4><div class="hp-rw-row hp-rw-head"><span>Alliance</span><span>Total Hero Power</span><span>Share</span><span>Reward based on %</span><span>Fortress (Allocated)</span></div>${rows}<div class="hp-rw-row hp-rw-foot"><span>Total</span><span>${sum.toLocaleString('en-US')}</span><span>${sum?'100%':'0%'}</span><span>${rewardSum.toFixed(2)}</span><span>${allocSum}</span></div></div>`;
  };
- const note=linked?'':'<p class="page-subtitle hp-rw-note">Reward based on % = alliance share of Total Hero Power × '+HERO_POWER_REWARD_POOL+'. Fortress (Allocated) is read from the linked workbook — use “Choose File from Server” to link one.</p>';
- el.innerHTML=`<div class="hp-rw-grid">${block(15,'top15')}${block(20,'top20')}</div>${note}`;
+ const html=`<div class="hp-rw-grid">${block(15,'top15')}${block(20,'top20')}</div>`;
+ el.innerHTML=html+(usedDefault?`<p class="page-subtitle hp-rw-note">Reward based on % = alliance share of Total Hero Power × ${HERO_POWER_REWARD_POOL}. Fortress (Allocated) uses the default split ${HERO_POWER_DEFAULT_ALLOCATION.join('/')} by rank unless a linked workbook provides its own values.</p>`:'');
 }
 /* HERO-POWER-REWARDS-END */
 // Import spreadsheet-like files (Excel, CSV, TSV, TXT). Detect headers anywhere
