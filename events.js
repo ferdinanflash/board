@@ -518,7 +518,7 @@ function formatHeroPowerInput(el,index){
  renderHeroPowerGroupHeads();
 }
 function removeHeroPowerRow(index){if(!isAdmin)return;currentHeroPowerRows.splice(index,1);heroPowerDirty=true;renderHeroPowerRows();}
-const HERO_POWER_GROUP_DEFAULTS={hero:{name:'Name#1',power:'Hero Power',hint:'Kekuatan hero per pemain'},total:{name:'Name#2',power:'Total Hero Power',hint:'Total kekuatan hero per pemain'}};
+const HERO_POWER_GROUP_DEFAULTS={hero:{name:'Name#1',power:'Hero Power',hint:'Hero power per player'},total:{name:'Name#2',power:'Total Hero Power',hint:'Total hero power per player'}};
 function heroPowerGroupIndexes(){
  const g={hero:[],total:[]};
  currentHeroPowerRows.forEach((r,i)=>g[heroPowerKind(r)].push(i));
@@ -531,7 +531,7 @@ function renderHeroPowerGroupHeads(){
   const el=document.querySelector(`#hero-power-groups [data-kind="${kind}"] .hp-group-stats`); if(!el)return;
   const rows=groups[kind].map(i=>currentHeroPowerRows[i]).filter(r=>String(r.name||'').trim());
   const sum=(list)=>list.reduce((t,r)=>t+(Number(r.hero_power)||0),0);
-  el.innerHTML=`<span>Pemain <b>${rows.length}</b></span><span>Top 15 <b>${sum(rows.slice(0,15)).toLocaleString()}</b></span><span>Top 20 <b>${sum(rows.slice(0,20)).toLocaleString()}</b></span>`;
+  el.innerHTML=`<span>Players <b>${rows.length}</b></span><span>Top 15 <b>${sum(rows.slice(0,15)).toLocaleString()}</b></span><span>Top 20 <b>${sum(rows.slice(0,20)).toLocaleString()}</b></span>`;
  });
 }
 function renderHeroPowerRows(){
@@ -549,12 +549,12 @@ function renderHeroPowerRows(){
    const r=currentHeroPowerRows[i], rank=pos+1, tier=heroPowerRankTier(rank);
    const divider=(rank===15||rank===20)?` hp-divider-${rank}`:'';
    const powerText=r.hero_power==null?'':Number(r.hero_power).toLocaleString('en-US');
-   return `<div class="hp-row hp-${tier}${divider}"><span class="hp-rank" title="${tier==='top15'?'Masuk Top 15':tier==='top20'?'Masuk Top 20':'Di luar Top 20'}">${rank}</span><input class="hp-name" ${dis} value="${escapeHtml(r.name||'')}" placeholder="Nama pemain" aria-label="Nama pemain ${rank}" onchange="updateHeroPowerCell(${i},'name',this.value);renderHeroPowerGroupHeads()"><input class="hp-alliance" ${dis} list="hp-alliance-list" value="${escapeHtml(r.alliance||'')}" placeholder="Aliansi" aria-label="Aliansi ${rank}" style="border-left-color:${colorOf(r.alliance)}" maxlength="12" onchange="updateHeroPowerCell(${i},'alliance',this.value);renderHeroPowerRows()"><input class="hp-power" ${dis} type="text" inputmode="numeric" autocomplete="off" value="${powerText}" placeholder="0" aria-label="${escapeHtml(first._source_power_label||def.power)} ${rank}" onfocus="this.select()" onchange="formatHeroPowerInput(this,${i})">${isAdmin?`<button class="hero-power-remove hp-remove" onclick="removeHeroPowerRow(${i})" aria-label="Hapus baris ${rank}">×</button>`:'<span></span>'}</div>`;
-  }).join('')||'<p class="page-subtitle hp-empty">Belum ada data.</p>';
-  return `<section class="hp-group" data-kind="${kind}"><header class="hp-group-head"><div><h3>${escapeHtml(title)}</h3><p>${def.hint}</p></div><div class="hp-group-stats"></div></header><div class="hp-cols" aria-hidden="true"><span>#</span><span>Pemain</span><span>Aliansi</span><span>${escapeHtml(first._source_power_label||def.power)}</span><span></span></div><div class="hp-rows">${rows}</div>${isAdmin?`<button class="btn-back hp-add" onclick="addHeroPowerRow('${kind}')">+ Tambah baris ${escapeHtml(first._source_name_label||def.name)}</button>`:''}</section>`;
+   return `<div class="hp-row hp-${tier}${divider}"><span class="hp-rank" title="${tier==='top15'?'In Top 15':tier==='top20'?'In Top 20':'Outside Top 20'}">${rank}</span><input class="hp-name" ${dis} value="${escapeHtml(r.name||'')}" placeholder="Player name" aria-label="Player name ${rank}" onchange="updateHeroPowerCell(${i},'name',this.value);renderHeroPowerGroupHeads()"><input class="hp-alliance" ${dis} list="hp-alliance-list" value="${escapeHtml(r.alliance||'')}" placeholder="Alliance" aria-label="Alliance ${rank}" style="border-left-color:${colorOf(r.alliance)}" maxlength="12" onchange="updateHeroPowerCell(${i},'alliance',this.value);renderHeroPowerRows()"><input class="hp-power" ${dis} type="text" inputmode="numeric" autocomplete="off" value="${powerText}" placeholder="0" aria-label="${escapeHtml(first._source_power_label||def.power)} ${rank}" onfocus="this.select()" onchange="formatHeroPowerInput(this,${i})">${isAdmin?`<button class="hero-power-remove hp-remove" onclick="removeHeroPowerRow(${i})" aria-label="Remove row ${rank}">×</button>`:'<span></span>'}</div>`;
+  }).join('')||'<p class="page-subtitle hp-empty">No data yet.</p>';
+  return `<section class="hp-group" data-kind="${kind}"><header class="hp-group-head"><div><h3>${escapeHtml(title)}</h3><p>${def.hint}</p></div><div class="hp-group-stats"></div></header><div class="hp-cols" aria-hidden="true"><span>#</span><span>Player</span><span>Alliance</span><span>${escapeHtml(first._source_power_label||def.power)}</span><span></span></div><div class="hp-rows">${rows}</div>${isAdmin?`<button class="btn-back hp-add" onclick="addHeroPowerRow('${kind}')">+ Add row ${escapeHtml(first._source_name_label||def.name)}</button>`:''}</section>`;
  };
  host.classList.toggle('hp-readonly',!isAdmin);
- host.innerHTML=`<datalist id="hp-alliance-list">${alliances.map(a=>`<option value="${escapeHtml(a)}"></option>`).join('')}</datalist><div class="hp-legend"><span><i class="hp-dot hp-dot-top15"></i>Top 15</span><span><i class="hp-dot hp-dot-top20"></i>Top 16–20</span><span><i class="hp-dot hp-dot-rest"></i>Di luar Top 20</span></div><div class="hp-group-grid">${groupHtml('hero')}${groupHtml('total')}</div>`;
+ host.innerHTML=`<datalist id="hp-alliance-list">${alliances.map(a=>`<option value="${escapeHtml(a)}"></option>`).join('')}</datalist><div class="hp-legend"><span><i class="hp-dot hp-dot-top15"></i>Top 15</span><span><i class="hp-dot hp-dot-top20"></i>Top 16–20</span><span><i class="hp-dot hp-dot-rest"></i>Outside Top 20</span></div><div class="hp-group-grid">${groupHtml('hero')}${groupHtml('total')}</div>`;
  renderHeroPowerGroupHeads();
  renderHeroPowerSummary();
 }

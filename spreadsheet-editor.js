@@ -222,6 +222,33 @@
       alert('Could not open server workbook: ' + (err?.message || err) + (String(err?.code || '') === '42P01' ? '\n\nRun spreadsheet-editor-supabase-setup.sql in the Supabase SQL Editor first.' : ''));
     } finally { if (btn) { btn.disabled = false; btn.textContent = 'Open Server'; } }
   }
+  async function deleteFromServer() {
+    const btn = document.querySelector('[onclick="spreadsheetDeleteFromServer()"]');
+    if (btn?.disabled) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+    try {
+      const client = getServerClient();
+      await requireStaffSession(client);
+      const { data, error } = await client.from('spreadsheet_workbooks').select('id,name,updated_at,created_at').order('updated_at', { ascending: false }).limit(100);
+      if (error) throw error;
+      if (!data?.length) { alert('No saved workbooks found on the server.'); return; }
+      const choices = data.map((row, i) => `${i + 1}. ${row.name} — ${new Date(row.updated_at || row.created_at).toLocaleString()}`).join('\n');
+      const answer = prompt('Choose a workbook number to DELETE from the server:\n\n' + choices, '');
+      if (answer === null || answer.trim() === '') return;
+      const index = Number.parseInt(answer, 10) - 1;
+      if (!Number.isInteger(index) || index < 0 || index >= data.length) { alert('Invalid workbook number.'); return; }
+      const row = data[index];
+      if (!confirm(`Delete workbook “${row.name}” from the server?\n\nThis cannot be undone. Hero Power sheets linked to this workbook will be unlinked.`)) return;
+      const { data: removed, error: delError } = await client.from('spreadsheet_workbooks').delete().eq('id', row.id).select('id');
+      if (delError) throw delError;
+      if (!removed?.length) throw new Error('The server did not delete this workbook. Check your Supabase delete permissions (run spreadsheet-editor-supabase-setup.sql).');
+      if (serverWorkbookId === row.id) { serverWorkbookId = null; dirty = true; renderTabs(); }
+      $('spreadsheet-status').textContent = `Deleted “${row.name}” from the server` + (serverWorkbookId === null && dirty ? ' · current workbook is now unsaved' : '');
+    } catch (err) {
+      console.error('Spreadsheet server delete failed:', err);
+      alert('Could not delete server workbook: ' + (err?.message || err) + (String(err?.code || '') === '42P01' ? '\n\nRun spreadsheet-editor-supabase-setup.sql in the Supabase SQL Editor first.' : ''));
+    } finally { if (btn) { btn.disabled = false; btn.textContent = 'Delete from Server'; } }
+  }
   function saveDraft() {
     try { localStorage.setItem('wos3475_spreadsheet_draft',JSON.stringify({sheets:workbookSheets.map(s=>({name:s.name,model:s.model.toJSON()})),activeSheet,selected,updatedAt:new Date().toISOString()})); dirty=false; renderTabs(); $('spreadsheet-status').textContent='Draft saved in this browser'; }
     catch(e){alert('Could not save local draft. Browser storage may be full or disabled.');}
@@ -249,6 +276,7 @@
   window.spreadsheetSaveDraft=saveDraft;
   window.spreadsheetSaveToServer=saveToServer;
   window.spreadsheetOpenFromServer=openFromServer;
+  window.spreadsheetDeleteFromServer=deleteFromServer;
   window.spreadsheetAddRow=addRow;
   window.spreadsheetAddColumn=addColumn;
   window.addEventListener('keydown', e => { if(e.key==='Escape'&&!$('spreadsheet-editor-modal')?.classList.contains('hidden'))closeSpreadsheetEditor(); });
