@@ -714,38 +714,91 @@ function heroPowerRowsFromMatrix(matrix){
  const seen=new Set();return out.filter(r=>{const key=[r.name.toLowerCase(),r.alliance.toLowerCase(),r.hero_power].join('|');if(seen.has(key))return false;seen.add(key);return true;});
 }
 
+const HP_VIEWER={books:[],book:null,payload:null,sheet:0};
+const HPV_MAX_ROWS=1000,HPV_MAX_COLS=60;
+function hpvEl(id){return document.getElementById(id);}
+function hpvDate(b){const d=new Date(b?.updated_at||b?.created_at||Date.now());return isNaN(d)?'':d.toLocaleString();}
+function hpvColName(n){let out='';n++;while(n){const r=(n-1)%26;out=String.fromCharCode(65+r)+out;n=Math.floor((n-1)/26);}return out;}
+function hpvColIndex(l){let n=0;for(const ch of l)n=n*26+ch.charCodeAt(0)-64;return n-1;}
+
 async function viewHeroPowerWorkbookFullDisplay(){
  const client=getSupabase();if(!client)return;
  try{
   const {data:authData,error:authError}=await client.auth.getSession();if(authError)throw authError;
   if(!authData?.session)throw new Error('Please sign in first. Server workbooks require a staff session.');
-  const {data:books,error}=await client.from('spreadsheet_workbooks').select('id,name,workbook,updated_at,created_at').order('updated_at',{ascending:false}).limit(100);if(error)throw error;
+  const {data:books,error}=await client.from('spreadsheet_workbooks').select('id,name,updated_at,created_at').order('updated_at',{ascending:false}).limit(100);if(error)throw error;
   if(!books?.length){showToast('No saved Spreadsheet Editor workbooks found in Supabase.','warning');return;}
-  const choices=books.map((b,i)=>`${i+1}. ${b.name} — ${new Date(b.updated_at||b.created_at||Date.now()).toLocaleString()}`).join('\n');
-  const answer=prompt('Choose a workbook to view in full (read-only):\n\n'+choices,'1');if(answer===null)return;
-  const bi=Number.parseInt(answer,10)-1;if(!Number.isInteger(bi)||bi<0||bi>=books.length)throw new Error('Invalid workbook selection.');
-  const book=books[bi],payload=typeof book.workbook==='string'?JSON.parse(book.workbook):book.workbook;
-  if(!Array.isArray(payload?.sheets)||!payload.sheets.length)throw new Error('The selected workbook has no readable worksheets.');
-  const colIndex=letters=>{let n=0;for(const ch of letters)n=n*26+ch.charCodeAt(0)-64;return n-1;};
-  const colName=n=>{let out='';n++;while(n){const r=(n-1)%26;out=String.fromCharCode(65+r)+out;n=Math.floor((n-1)/26);}return out;};
-  const content=document.getElementById('hero-power-full-display-content');
-  content.innerHTML=payload.sheets.map((sh,si)=>{
-   const cells=(sh.model||{}).cells||{},model=new SheetEngine.Model(sh.model||{}),entries=[];let maxRow=0,maxCol=0;
-   for(const [addr,cell] of Object.entries(cells)){const m=/^([A-Z]+)(\d+)$/i.exec(addr);if(!m)continue;const r=Number(m[2])-1,c=colIndex(m[1].toUpperCase());if(r<0||c<0)continue;maxRow=Math.max(maxRow,r);maxCol=Math.max(maxCol,c);entries.push([r,c,model.getValue(c,r),cell]);}
-   if(!entries.length)return `<section class="hero-power-full-sheet"><h3>${escapeHtml(sh.name||`Sheet ${si+1}`)}</h3><p class="page-subtitle">Empty worksheet</p></section>`;
-   const matrix=Array.from({length:maxRow+1},()=>Array(maxCol+1).fill(''));
-   for(const [r,c,v] of entries)matrix[r][c]=v==null?'':v;
-   let html=`<section class="hero-power-full-sheet" style="margin:18px 0 28px;"><h3>${escapeHtml(sh.name||`Sheet ${si+1}`)}</h3><div style="overflow:auto;max-height:60vh;border:1px solid var(--border-color,#343844);border-radius:8px;"><table class="hero-power-table" style="min-width:max-content;width:100%;"><thead><tr><th style="position:sticky;left:0;z-index:2;">#</th>`;
-   for(let c=0;c<=maxCol;c++)html+=`<th>${colName(c)}</th>`;
-   html+='</tr></thead><tbody>';
-   for(let r=0;r<=maxRow;r++){html+=`<tr><th style="position:sticky;left:0;">${r+1}</th>`;for(let c=0;c<=maxCol;c++){const v=matrix[r][c];html+=`<td style="white-space:pre-wrap;min-width:72px;max-width:260px;">${escapeHtml(String(v??''))}</td>`;}html+='</tr>';}
-   html+='</tbody></table></div></section>';return html;
-  }).join('');
-  document.getElementById('hero-power-full-display-meta').textContent=`${book.name} · ${payload.sheets.length} worksheet(s) · Read-only · Loaded from Supabase`;
-  document.getElementById('hero-power-full-display-modal').classList.remove('hidden');
+  HP_VIEWER.books=books;HP_VIEWER.book=null;HP_VIEWER.payload=null;
+  hpvShowPicker();
+  hpvEl('hero-power-full-display-modal').classList.remove('hidden');
  }catch(err){console.error('Could not display full server workbook:',err);showToast(`Could not load workbook from Supabase: ${err?.message||err}`,'error');}
 }
-function closeHeroPowerFullDisplay(){document.getElementById('hero-power-full-display-modal')?.classList.add('hidden');}
+
+function hpvShowPicker(){
+ hpvEl('hpv-title').textContent='Choose a workbook';
+ hpvEl('hero-power-full-display-meta').textContent=`${HP_VIEWER.books.length} workbook(s) saved on the server`;
+ hpvEl('hpv-back').classList.add('hidden');
+ hpvEl('hpv-body').classList.add('hidden');
+ const picker=hpvEl('hpv-picker');picker.classList.remove('hidden','is-loading');
+ picker.innerHTML=HP_VIEWER.books.map((b,i)=>`<button type="button" class="hpv-book" onclick="openHeroPowerViewerBook(${i})"><span class="hpv-book-icon">▦</span><span class="hpv-book-info"><b>${escapeHtml(b.name||'Untitled workbook')}</b><small>Updated ${escapeHtml(hpvDate(b))}</small></span><span class="hpv-book-go">›</span></button>`).join('');
+}
+
+async function openHeroPowerViewerBook(i){
+ const b=HP_VIEWER.books[i],client=getSupabase();if(!b||!client)return;
+ const picker=hpvEl('hpv-picker');picker.classList.add('is-loading');
+ try{
+  const {data,error}=await client.from('spreadsheet_workbooks').select('id,name,workbook,updated_at,created_at').eq('id',b.id).single();if(error)throw error;
+  const payload=typeof data.workbook==='string'?JSON.parse(data.workbook):data.workbook;
+  if(!Array.isArray(payload?.sheets)||!payload.sheets.length)throw new Error('The selected workbook has no readable worksheets.');
+  HP_VIEWER.book=data;HP_VIEWER.payload=payload;HP_VIEWER.sheet=0;
+  hpvEl('hpv-title').textContent=data.name||'Workbook';
+  hpvEl('hero-power-full-display-meta').textContent=`${payload.sheets.length} worksheet(s) · Updated ${hpvDate(data)}`;
+  picker.classList.add('hidden');picker.classList.remove('is-loading');
+  hpvEl('hpv-back').classList.remove('hidden');
+  hpvEl('hpv-body').classList.remove('hidden');
+  renderHeroPowerViewerSheet(0);
+ }catch(err){picker.classList.remove('is-loading');console.error('Could not open workbook:',err);showToast(`Could not open workbook: ${err?.message||err}`,'error');}
+}
+
+function renderHeroPowerViewerSheet(si){
+ const payload=HP_VIEWER.payload;if(!payload)return;
+ HP_VIEWER.sheet=si;
+ hpvEl('hpv-tabs').innerHTML=payload.sheets.map((sh,i)=>`<button type="button" class="hpv-tab${i===si?' active':''}" onclick="renderHeroPowerViewerSheet(${i})">${escapeHtml(sh.name||`Sheet ${i+1}`)}</button>`).join('');
+ const search=hpvEl('hpv-search');search.value='';
+ const grid=hpvEl('hpv-grid'),status=hpvEl('hpv-status'),sh=payload.sheets[si];
+ const cells=(sh.model||{}).cells||{},model=new SheetEngine.Model(sh.model||{});
+ let maxRow=-1,maxCol=-1;
+ for(const addr of Object.keys(cells)){const m=/^([A-Z]+)(\d+)$/i.exec(addr);if(!m)continue;const r=Number(m[2])-1,c=hpvColIndex(m[1].toUpperCase());if(r<0||c<0)continue;if(r>maxRow)maxRow=r;if(c>maxCol)maxCol=c;}
+ if(maxRow<0){grid.innerHTML='<div class="hpv-empty">This worksheet is empty.</div>';status.textContent='0 rows';return;}
+ const rows=Math.min(maxRow+1,HPV_MAX_ROWS),cols=Math.min(maxCol+1,HPV_MAX_COLS);
+ let html='<table class="hpv-table"><thead><tr><th class="hpv-corner">#</th>';
+ for(let c=0;c<cols;c++)html+=`<th>${hpvColName(c)}</th>`;
+ html+='</tr></thead><tbody>';
+ for(let r=0;r<rows;r++){
+  let rowHtml='',any=false;
+  for(let c=0;c<cols;c++){
+   const raw=model.getValue(c,r),text=model.display(c,r),isNum=typeof raw==='number',isErr=typeof raw==='string'&&/^#[A-Z0-9\/!?]+$/.test(raw);
+   if(text!=='')any=true;
+   rowHtml+=`<td class="${isNum?'num':''}${isErr?' err':''}">${escapeHtml(String(text))}</td>`;
+  }
+  html+=`<tr class="${any?'':'hpv-blank'}"><th class="hpv-rowhead">${r+1}</th>${rowHtml}</tr>`;
+ }
+ html+='</tbody></table>';
+ grid.innerHTML=html;grid.scrollTop=0;grid.scrollLeft=0;
+ HP_VIEWER.totalRows=rows;
+ HP_VIEWER.note=(maxRow+1>rows||maxCol+1>cols)?` · Showing first ${rows} rows × ${cols} columns`:'';
+ status.textContent=`${rows} rows × ${cols} columns${HP_VIEWER.note}`;
+}
+
+function filterHeroPowerViewer(){
+ const q=(hpvEl('hpv-search').value||'').trim().toLowerCase(),trs=hpvEl('hpv-grid').querySelectorAll('tbody tr');
+ let shown=0;
+ trs.forEach(tr=>{const hit=!q||tr.textContent.toLowerCase().includes(q);tr.classList.toggle('hidden',!hit);if(hit)shown++;});
+ hpvEl('hpv-status').textContent=q?`${shown} of ${trs.length} rows match “${hpvEl('hpv-search').value.trim()}”`:`${trs.length} rows${HP_VIEWER.note||''}`;
+}
+
+function closeHeroPowerFullDisplay(){hpvEl('hero-power-full-display-modal')?.classList.add('hidden');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!hpvEl('hero-power-full-display-modal')?.classList.contains('hidden'))closeHeroPowerFullDisplay();});
 
 async function chooseHeroPowerWorkbookFromServer(){
  if(!isAdmin||!currentHeroPowerSheet)return;
