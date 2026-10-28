@@ -475,7 +475,7 @@ async function openHeroPowerSheet(id) {
     document.getElementById('hero-power-sheet-list').classList.add('hidden'); document.getElementById('hero-power-workspace').classList.remove('hidden');
     document.getElementById('hero-power-current-title').innerText=sheet.name; document.getElementById('hero-power-sheet-meta').innerText=sheet.sheet_date||'No date';
     document.getElementById('hero-power-save')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-import')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-full-display')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-export-csv')?.classList.toggle('hidden',!isAdmin); document.getElementById('hero-power-add-row')?.classList.toggle('hidden',!isAdmin);
-    renderHeroPowerRows();
+    heroPowerAllocations={top15:null,top20:null}; renderHeroPowerRows(); loadHeroPowerAllocations();
 }
 function closeHeroPowerWorkspace(){ currentHeroPowerSheet=null; document.getElementById('hero-power-workspace').classList.add('hidden'); document.getElementById('hero-power-sheet-list').classList.remove('hidden'); }
 function exportHeroPowerSheetCsv(){
@@ -580,7 +580,70 @@ function renderHeroPowerSummary(){
  const allianceMarkup=(label,values)=>{const sorted=Object.entries(values).sort((a,b)=>b[1]-a[1]);return sorted.length?`<div class="hero-power-alliance-totals"><b>${label}</b>${sorted.map(([a,n])=>{const c=allianceColors[a]||['#20232d','#e2e8f0'];return `<span style="--alliance-bg:${c[0]};--alliance-fg:${c[1]}"><i>${escapeHtml(a)}</i> <strong>${n.toLocaleString()}</strong></span>`}).join('')}</div>`:''};
  const topAllianceTotals=(kind,limit)=>{const top=currentHeroPowerRows.filter(r=>heroPowerKind(r)===kind&&r.name&&r.alliance&&Number(r.hero_power)>0).slice().sort((a,b)=>(Number(b.hero_power)||0)-(Number(a.hero_power)||0)).slice(0,limit);const totals={};top.forEach(r=>{totals[r.alliance]=(totals[r.alliance]||0)+(Number(r.hero_power)||0)});return totals};
  el.innerHTML=`<div class="hero-power-total">Players: <b>${currentHeroPowerRows.filter(r=>r.name).length}</b> · Hero Power: <b>${buckets.hero.sum.toLocaleString()}</b> · Total Hero Power: <b>${buckets.total.sum.toLocaleString()}</b></div>${allianceMarkup('Alliance totals · Hero Power',buckets.hero.alliances)}${allianceMarkup('Alliance totals · Total Hero Power',buckets.total.alliances)}${allianceMarkup('Top 15 · Hero Power by Alliance',topAllianceTotals('hero',15))}${allianceMarkup('Top 15 · Total Hero Power by Alliance',topAllianceTotals('total',15))}${allianceMarkup('Top 20 · Hero Power by Alliance',topAllianceTotals('hero',20))}${allianceMarkup('Top 20 · Total Hero Power by Alliance',topAllianceTotals('total',20))}`;
+ renderHeroPowerRewards();
 }
+
+/* HERO-POWER-REWARDS-START */
+const HERO_POWER_REWARD_POOL=30;
+let heroPowerAllocations={top15:null,top20:null};
+function heroPowerTopMarker(v){const m=/^\s*top\s*(15|20)\b/i.exec(String(v??''));return m?'top'+m[1]:null;}
+function heroPowerReadAllocations(model){
+ const out={top15:null,top20:null}, E=window.SheetEngine, markers=[];
+ for(const k of Object.keys(model.cells||{})){const p=E.parseKey(k);if(!p)continue;const t=heroPowerTopMarker(model.getValue(p.c,p.r));if(t)markers.push({t,c:p.c,r:p.r});}
+ markers.forEach(mk=>{
+  let allianceCol=-1,allocCol=-1;
+  for(let c=mk.c+1;c<E.MAX_COLS;c++){const h=String(model.getValue(c,mk.r)??'').toLowerCase();if(allianceCol<0&&h.includes('total hero power'))allianceCol=c;if(allocCol<0&&h.includes('allocated'))allocCol=c;}
+  if(allianceCol<0||allocCol<0)return;
+  const map={};
+  for(let r=mk.r+1;r<mk.r+40;r++){
+   if(heroPowerTopMarker(model.getValue(mk.c,r)))break;
+   const name=String(model.getValue(allianceCol,r)??'').trim(); if(!name)break;
+   const n=Number(model.getValue(allocCol,r)); if(Number.isFinite(n))map[name.toUpperCase()]=n;
+  }
+  out[mk.t]=map;
+ });
+ return out;
+}
+async function loadHeroPowerAllocations(){
+ const sheet=currentHeroPowerSheet; heroPowerAllocations={top15:null,top20:null};
+ try{
+  if(sheet?.source_workbook_id&&sheet?.source_worksheet_name&&window.SheetEngine){
+   const client=getSupabase();
+   const {data:book,error}=await client.from('spreadsheet_workbooks').select('workbook').eq('id',sheet.source_workbook_id).single(); if(error)throw error;
+   if(currentHeroPowerSheet!==sheet)return;
+   const payload=typeof book.workbook==='string'?JSON.parse(book.workbook):book.workbook;
+   const sh=((payload||{}).sheets||[]).find(x=>String(x.name)===String(sheet.source_worksheet_name));
+   if(sh)heroPowerAllocations=heroPowerReadAllocations(new SheetEngine.Model(sh.model||{}));
+  }
+ }catch(err){console.warn('Could not load fortress allocations:',err);}
+ if(currentHeroPowerSheet===sheet)renderHeroPowerRewards();
+}
+function heroPowerTopTotals(kind,limit){
+ const top=currentHeroPowerRows.filter(r=>heroPowerKind(r)===kind&&r.name&&r.alliance&&Number(r.hero_power)>0).slice().sort((a,b)=>(Number(b.hero_power)||0)-(Number(a.hero_power)||0)).slice(0,limit);
+ const totals={};top.forEach(r=>{const a=String(r.alliance).trim();totals[a]=(totals[a]||0)+(Number(r.hero_power)||0);});return totals;
+}
+function renderHeroPowerRewards(){
+ const el=document.getElementById('hero-power-rewards'); if(!el)return;
+ const names=[...new Set(currentHeroPowerRows.map(r=>String(r.alliance||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ if(!names.length){el.innerHTML='';return;}
+ const palette=['#4ade80','#c4b5fd','#fdba74','#7dd3fc','#f9a8d4','#fde047','#67e8f9','#fca5a5','#cbd5e1','#bef264'];
+ const colorOf=a=>palette[names.indexOf(a)%palette.length];
+ const linked=!!(currentHeroPowerSheet&&currentHeroPowerSheet.source_workbook_id);
+ const block=(limit,key)=>{
+  const totals=heroPowerTopTotals('total',limit), sum=Object.values(totals).reduce((t,n)=>t+n,0), alloc=heroPowerAllocations[key];
+  const list=names.slice().sort((a,b)=>(totals[b]||0)-(totals[a]||0)||a.localeCompare(b));
+  let rewardSum=0,allocSum=0,allocAny=false;
+  const rows=list.map(a=>{
+   const t=totals[a]||0, share=sum?t/sum:0, reward=share*HERO_POWER_REWARD_POOL; rewardSum+=reward;
+   const al=alloc&&Object.prototype.hasOwnProperty.call(alloc,a.toUpperCase())?alloc[a.toUpperCase()]:null; if(al!==null){allocSum+=al;allocAny=true;}
+   return `<tr><td class="hp-rw-alliance" style="border-left-color:${colorOf(a)}">${escapeHtml(a)}</td><td>${t.toLocaleString('en-US')}</td><td>${(share*100).toFixed(2)}%</td><td><b>${reward.toFixed(2)}</b></td><td><b>${al===null?'—':al}</b></td></tr>`;
+  }).join('');
+  return `<div class="hp-rw-block"><h4>Top ${limit} · Rewards</h4><div class="hp-rw-scroll"><table class="hp-rw-table"><thead><tr><th>Alliance</th><th>Total Hero Power</th><th>Share</th><th>Reward based on %</th><th>Reward Share Fortress (Allocated)</th></tr></thead><tbody>${rows}</tbody><tfoot><tr><td>Total</td><td>${sum.toLocaleString('en-US')}</td><td>${sum?'100.00%':'0.00%'}</td><td>${rewardSum.toFixed(2)}</td><td>${allocAny?allocSum:'—'}</td></tr></tfoot></table></div></div>`;
+ };
+ const note=linked?'':'<p class="page-subtitle hp-rw-note">Reward based on % = alliance share of Total Hero Power × '+HERO_POWER_REWARD_POOL+'. Fortress (Allocated) is read from the linked workbook — use “Choose File from Server” to link one.</p>';
+ el.innerHTML=`<div class="hp-rw-grid">${block(15,'top15')}${block(20,'top20')}</div>${note}`;
+}
+/* HERO-POWER-REWARDS-END */
 // Import spreadsheet-like files (Excel, CSV, TSV, TXT). Detect headers anywhere
 // in the worksheet and support multiple Name/Power tables placed side-by-side.
 function parseHeroPowerDelimited(text) {
@@ -738,7 +801,7 @@ async function handleHeroPowerImportFile(event){
 }
 
 function closeHeroPowerImportPreview(){document.getElementById('hero-power-import-modal').classList.add('hidden');pendingHeroPowerImport=[];}
-function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHeroPowerImport.length)return;currentHeroPowerRows=pendingHeroPowerImport.map(r=>({...r}));if(pendingHeroPowerSource){currentHeroPowerSheet.source_workbook_id=pendingHeroPowerSource.workbookId;currentHeroPowerSheet.source_worksheet_name=pendingHeroPowerSource.worksheetName;currentHeroPowerSheet.source_workbook_name=pendingHeroPowerSource.workbookName;}heroPowerDirty=true;closeHeroPowerImportPreview();renderHeroPowerRows();showToast(pendingHeroPowerSource?'Live workbook linked. Save Changes will write player cells back to the source workbook; formulas and other cells are preserved.':'Import preview applied. Click Save Changes to store it.','success');}
+function applyHeroPowerImport(){if(!isAdmin||!currentHeroPowerSheet||!pendingHeroPowerImport.length)return;currentHeroPowerRows=pendingHeroPowerImport.map(r=>({...r}));if(pendingHeroPowerSource){currentHeroPowerSheet.source_workbook_id=pendingHeroPowerSource.workbookId;currentHeroPowerSheet.source_worksheet_name=pendingHeroPowerSource.worksheetName;currentHeroPowerSheet.source_workbook_name=pendingHeroPowerSource.workbookName;}heroPowerDirty=true;if(pendingHeroPowerSource)loadHeroPowerAllocations();closeHeroPowerImportPreview();renderHeroPowerRows();showToast(pendingHeroPowerSource?'Live workbook linked. Save Changes will write player cells back to the source workbook; formulas and other cells are preserved.':'Import preview applied. Click Save Changes to store it.','success');}
 
 function heroPowerColumnName(index){let n=index+1,out='';while(n){const r=(n-1)%26;out=String.fromCharCode(65+r)+out;n=Math.floor((n-1)/26);}return out;}
 async function syncHeroPowerRowsToLiveWorkbook(client, sheetId, rows, previousRows){
