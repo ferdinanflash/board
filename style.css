@@ -1544,3 +1544,20 @@ th.sortable:hover { color: #f1f5f9; }
   .hpv-table { font-size:.76rem; }
   .hpv-table th, .hpv-table td { padding:6px 9px; }
 }
+
+/* Viewer table: undo the global mobile "table → cards" rules so it stays a real grid */
+.hpv-table { display:table !important; width:max-content !important; min-width:100% !important; border-collapse:separate !important; border-spacing:0 !important; table-layout:auto !important; }
+.hpv-table thead { display:table-header-group !important; position:static !important; top:auto !important; left:auto !important; }
+.hpv-table tbody { display:table-row-group !important; }
+.hpv-table tr, .hpv-table tbody tr { display:table-row !important; background:none; border:0; border-radius:0; padding:0; margin:0; }
+.hpv-table th, .hpv-table td { display:table-cell !important; white-space:pre !important; text-align:left; min-width:72px !important; }
+.hpv-table thead th { text-align:center; }
+.hpv-table td::before { content:none !important; }
+.hpv-table td.num { text-align:right; }
+.hpv-table .hpv-corner, .hpv-table .hpv-rowhead { min-width:44px !important; width:44px; text-align:center; }
+@media screen and (max-width:640px) {
+  .hpv-table th, .hpv-table td { padding:6px 9px !important; font-size:.76rem !important; min-width:64px !important; border-bottom:1px solid #262a35; }
+  .hpv-table td { justify-content:normal; align-items:normal; }
+  .hpv-table .hpv-corner, .hpv-table .hpv-rowhead { min-width:38px !important; width:38px; padding:6px 4px !important; }
+  .hpv-grid { -webkit-overflow-scrolling:touch; }
+}
