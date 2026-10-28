@@ -734,9 +734,19 @@ async function viewHeroPowerWorkbookFullDisplay(){
  }catch(err){console.error('Could not display full server workbook:',err);showToast(`Could not load workbook from Supabase: ${err?.message||err}`,'error');}
 }
 
+function hpvEnsureModal(){
+ let modal=hpvEl('hero-power-full-display-modal');
+ if(modal&&hpvEl('hpv-title')&&hpvEl('hpv-picker')&&hpvEl('hpv-body'))return modal;
+ const html=`<div class="modal-content hpv-modal" role="dialog" aria-modal="true" aria-labelledby="hpv-title"><div class="hpv-head"><button id="hpv-back" type="button" class="hpv-iconbtn hidden" onclick="hpvShowPicker()" aria-label="Back to workbook list">‹</button><div class="hpv-head-text"><h2 id="hpv-title" class="modal-title">Choose a workbook</h2><p id="hero-power-full-display-meta" class="page-subtitle"></p></div><span class="hpv-badge">View only</span><button type="button" class="hpv-iconbtn" onclick="closeHeroPowerFullDisplay()" aria-label="Close">&times;</button></div><div id="hpv-picker" class="hpv-picker"></div><div id="hpv-body" class="hpv-body hidden"><div class="hpv-toolbar"><input id="hpv-search" type="search" class="hpv-search" placeholder="Search in this sheet…" oninput="filterHeroPowerViewer()" autocomplete="off"><span id="hpv-status" class="hpv-status"></span></div><div id="hpv-grid" class="hpv-grid"></div><div id="hpv-tabs" class="hpv-tabs"></div></div></div>`;
+ if(!modal){modal=document.createElement('div');modal.id='hero-power-full-display-modal';modal.className='modal hidden';document.body.appendChild(modal);}
+ modal.className='modal hidden';modal.onclick=e=>{if(e.target===modal)closeHeroPowerFullDisplay();};
+ modal.innerHTML=html;return modal;
+}
+function hpvSetText(id,text){const el=hpvEl(id);if(el)el.textContent=text;}
 function hpvShowPicker(){
- hpvEl('hpv-title').textContent='Choose a workbook';
- hpvEl('hero-power-full-display-meta').textContent=`${HP_VIEWER.books.length} workbook(s) saved on the server`;
+ hpvEnsureModal();
+ hpvSetText('hpv-title','Choose a workbook');
+ hpvSetText('hero-power-full-display-meta',`${HP_VIEWER.books.length} workbook(s) saved on the server`);
  hpvEl('hpv-back').classList.add('hidden');
  hpvEl('hpv-body').classList.add('hidden');
  const picker=hpvEl('hpv-picker');picker.classList.remove('hidden','is-loading');
@@ -751,8 +761,8 @@ async function openHeroPowerViewerBook(i){
   const payload=typeof data.workbook==='string'?JSON.parse(data.workbook):data.workbook;
   if(!Array.isArray(payload?.sheets)||!payload.sheets.length)throw new Error('The selected workbook has no readable worksheets.');
   HP_VIEWER.book=data;HP_VIEWER.payload=payload;HP_VIEWER.sheet=0;
-  hpvEl('hpv-title').textContent=data.name||'Workbook';
-  hpvEl('hero-power-full-display-meta').textContent=`${payload.sheets.length} worksheet(s) · Updated ${hpvDate(data)}`;
+  hpvSetText('hpv-title',data.name||'Workbook');
+  hpvSetText('hero-power-full-display-meta',`${payload.sheets.length} worksheet(s) · Updated ${hpvDate(data)}`);
   picker.classList.add('hidden');picker.classList.remove('is-loading');
   hpvEl('hpv-back').classList.remove('hidden');
   hpvEl('hpv-body').classList.remove('hidden');
@@ -769,7 +779,7 @@ function renderHeroPowerViewerSheet(si){
  const cells=(sh.model||{}).cells||{},model=new SheetEngine.Model(sh.model||{});
  let maxRow=-1,maxCol=-1;
  for(const addr of Object.keys(cells)){const m=/^([A-Z]+)(\d+)$/i.exec(addr);if(!m)continue;const r=Number(m[2])-1,c=hpvColIndex(m[1].toUpperCase());if(r<0||c<0)continue;if(r>maxRow)maxRow=r;if(c>maxCol)maxCol=c;}
- if(maxRow<0){grid.innerHTML='<div class="hpv-empty">This worksheet is empty.</div>';status.textContent='0 rows';return;}
+ if(maxRow<0){grid.innerHTML='<div class="hpv-empty">This worksheet is empty.</div>';hpvSetText('hpv-status','0 rows');return;}
  const rows=Math.min(maxRow+1,HPV_MAX_ROWS),cols=Math.min(maxCol+1,HPV_MAX_COLS);
  let html='<table class="hpv-table"><thead><tr><th class="hpv-corner">#</th>';
  for(let c=0;c<cols;c++)html+=`<th>${hpvColName(c)}</th>`;
@@ -787,14 +797,14 @@ function renderHeroPowerViewerSheet(si){
  grid.innerHTML=html;grid.scrollTop=0;grid.scrollLeft=0;
  HP_VIEWER.totalRows=rows;
  HP_VIEWER.note=(maxRow+1>rows||maxCol+1>cols)?` · Showing first ${rows} rows × ${cols} columns`:'';
- status.textContent=`${rows} rows × ${cols} columns${HP_VIEWER.note}`;
+ hpvSetText('hpv-status',`${rows} rows × ${cols} columns${HP_VIEWER.note}`);
 }
 
 function filterHeroPowerViewer(){
  const q=(hpvEl('hpv-search').value||'').trim().toLowerCase(),trs=hpvEl('hpv-grid').querySelectorAll('tbody tr');
  let shown=0;
  trs.forEach(tr=>{const hit=!q||tr.textContent.toLowerCase().includes(q);tr.classList.toggle('hidden',!hit);if(hit)shown++;});
- hpvEl('hpv-status').textContent=q?`${shown} of ${trs.length} rows match “${hpvEl('hpv-search').value.trim()}”`:`${trs.length} rows${HP_VIEWER.note||''}`;
+ hpvSetText('hpv-status',q?`${shown} of ${trs.length} rows match “${hpvEl('hpv-search').value.trim()}”`:`${trs.length} rows${HP_VIEWER.note||''}`);
 }
 
 function closeHeroPowerFullDisplay(){hpvEl('hero-power-full-display-modal')?.classList.add('hidden');}
