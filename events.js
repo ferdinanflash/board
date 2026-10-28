@@ -499,13 +499,63 @@ function exportHeroPowerSheetXlsx(){
  XLSX.writeFile(wb,`${String(currentHeroPowerSheet.name||'hero-power').replace(/[^a-z0-9-_]+/gi,'_')}.xlsx`);
 }
 
-function addHeroPowerRow(){if(!isAdmin)return; currentHeroPowerRows.push({name:'',alliance:'',hero_power:null}); heroPowerDirty=true; renderHeroPowerRows();}
-function updateHeroPowerCell(index,field,value){if(!isAdmin)return; currentHeroPowerRows[index][field]=field==='hero_power'?(value===''?null:Number(value)):value; heroPowerDirty=true; renderHeroPowerSummary();}
+function addHeroPowerRow(kind){
+ if(!isAdmin)return;
+ const total=kind==='total';
+ currentHeroPowerRows.push({name:'',alliance:'',hero_power:null,_source_name_label:total?'Name#2':'Name#1',_source_power_label:total?'Total Hero Power':'Hero Power'});
+ heroPowerDirty=true; renderHeroPowerRows();
+ const inputs=document.querySelectorAll(`#hero-power-groups [data-kind="${total?'total':'hero'}"] .hp-row:last-child input`); if(inputs[0])inputs[0].focus();
+}
+function updateHeroPowerCell(index,field,value){
+ if(!isAdmin||!currentHeroPowerRows[index])return;
+ currentHeroPowerRows[index][field]=field==='hero_power'?heroPowerParseInput(value):value;
+ heroPowerDirty=true; renderHeroPowerSummary();
+}
+function heroPowerParseInput(value){const d=String(value??'').replace(/[^0-9]/g,'');return d===''?null:Number(d);}
+function formatHeroPowerInput(el,index){
+ updateHeroPowerCell(index,'hero_power',el.value);
+ const n=currentHeroPowerRows[index]?.hero_power; el.value=n==null?'':Number(n).toLocaleString('en-US');
+ renderHeroPowerGroupHeads();
+}
 function removeHeroPowerRow(index){if(!isAdmin)return;currentHeroPowerRows.splice(index,1);heroPowerDirty=true;renderHeroPowerRows();}
+const HERO_POWER_GROUP_DEFAULTS={hero:{name:'Name#1',power:'Hero Power',hint:'Kekuatan hero per pemain'},total:{name:'Name#2',power:'Total Hero Power',hint:'Total kekuatan hero per pemain'}};
+function heroPowerGroupIndexes(){
+ const g={hero:[],total:[]};
+ currentHeroPowerRows.forEach((r,i)=>g[heroPowerKind(r)].push(i));
+ return g;
+}
+function heroPowerRankTier(rank){return rank<=15?'top15':rank<=20?'top20':'rest';}
+function renderHeroPowerGroupHeads(){
+ const groups=heroPowerGroupIndexes();
+ ['hero','total'].forEach(kind=>{
+  const el=document.querySelector(`#hero-power-groups [data-kind="${kind}"] .hp-group-stats`); if(!el)return;
+  const rows=groups[kind].map(i=>currentHeroPowerRows[i]).filter(r=>String(r.name||'').trim());
+  const sum=(list)=>list.reduce((t,r)=>t+(Number(r.hero_power)||0),0);
+  el.innerHTML=`<span>Pemain <b>${rows.length}</b></span><span>Top 15 <b>${sum(rows.slice(0,15)).toLocaleString()}</b></span><span>Top 20 <b>${sum(rows.slice(0,20)).toLocaleString()}</b></span>`;
+ });
+}
 function renderHeroPowerRows(){
- const tbody=document.getElementById('hero-power-rows');
- tbody.innerHTML=currentHeroPowerRows.map((r,i)=>{const sourceName=r._source_name_label||(Number(r._source_name_col??r.source_name_col)===0?'Name#1':Number(r._source_name_col??r.source_name_col)===6?'Name#2':Number.isInteger(Number(r._source_name_col??r.source_name_col))?'Source '+heroPowerColumnName(Number(r._source_name_col??r.source_name_col)):'');const sourcePower=r._source_power_label||(sourceName==='Name#2'?'Total Hero Power':'Hero Power');return `<tr><td class="hp-row-number"><span class="hp-row-index">${i+1}</span>${sourceName?`<small class="hp-source-label"><span>${escapeHtml(sourceName)}</span><span>${escapeHtml(sourcePower)}</span></small>`:''}</td><td><input ${isAdmin?'':'disabled'} value="${escapeHtml(r.name||'')}" placeholder="Player name" onchange="updateHeroPowerCell(${i},'name',this.value)"></td><td><input ${isAdmin?'':'disabled'} value="${escapeHtml(r.alliance||'')}" placeholder="Alliance" onchange="updateHeroPowerCell(${i},'alliance',this.value)"></td><td><input ${isAdmin?'':'disabled'} type="number" min="0" step="1" value="${r.hero_power??''}" placeholder="0" onchange="updateHeroPowerCell(${i},'hero_power',this.value)"></td>${isAdmin?`<td><button class="hero-power-remove" onclick="removeHeroPowerRow(${i})" aria-label="Remove row">×</button></td>`:''}</tr>`}).join('');
- document.getElementById('hero-power-actions-head').classList.toggle('hidden',!isAdmin);
+ const host=document.getElementById('hero-power-groups'); if(!host)return;
+ const groups=heroPowerGroupIndexes();
+ const alliances=[...new Set(currentHeroPowerRows.map(r=>String(r.alliance||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ const allianceNames=alliances;
+ const palette=['#4ade80','#c4b5fd','#fdba74','#7dd3fc','#f9a8d4','#fde047','#67e8f9','#fca5a5','#cbd5e1','#bef264'];
+ const colorOf=a=>{const i=allianceNames.indexOf(String(a||'').trim());return i<0?'#475569':palette[i%palette.length];};
+ const dis=isAdmin?'':'disabled';
+ const groupHtml=kind=>{
+  const idxs=groups[kind], first=currentHeroPowerRows[idxs[0]]||{}, def=HERO_POWER_GROUP_DEFAULTS[kind];
+  const title=`${first._source_name_label||def.name} · ${first._source_power_label||def.power}`;
+  const rows=idxs.map((i,pos)=>{
+   const r=currentHeroPowerRows[i], rank=pos+1, tier=heroPowerRankTier(rank);
+   const divider=(rank===15||rank===20)?` hp-divider-${rank}`:'';
+   const powerText=r.hero_power==null?'':Number(r.hero_power).toLocaleString('en-US');
+   return `<div class="hp-row hp-${tier}${divider}"><span class="hp-rank" title="${tier==='top15'?'Masuk Top 15':tier==='top20'?'Masuk Top 20':'Di luar Top 20'}">${rank}</span><input class="hp-name" ${dis} value="${escapeHtml(r.name||'')}" placeholder="Nama pemain" aria-label="Nama pemain ${rank}" onchange="updateHeroPowerCell(${i},'name',this.value);renderHeroPowerGroupHeads()"><input class="hp-alliance" ${dis} list="hp-alliance-list" value="${escapeHtml(r.alliance||'')}" placeholder="Aliansi" aria-label="Aliansi ${rank}" style="border-left-color:${colorOf(r.alliance)}" maxlength="12" onchange="updateHeroPowerCell(${i},'alliance',this.value);renderHeroPowerRows()"><input class="hp-power" ${dis} type="text" inputmode="numeric" autocomplete="off" value="${powerText}" placeholder="0" aria-label="${escapeHtml(first._source_power_label||def.power)} ${rank}" onfocus="this.select()" onchange="formatHeroPowerInput(this,${i})">${isAdmin?`<button class="hero-power-remove hp-remove" onclick="removeHeroPowerRow(${i})" aria-label="Hapus baris ${rank}">×</button>`:'<span></span>'}</div>`;
+  }).join('')||'<p class="page-subtitle hp-empty">Belum ada data.</p>';
+  return `<section class="hp-group" data-kind="${kind}"><header class="hp-group-head"><div><h3>${escapeHtml(title)}</h3><p>${def.hint}</p></div><div class="hp-group-stats"></div></header><div class="hp-cols" aria-hidden="true"><span>#</span><span>Pemain</span><span>Aliansi</span><span>${escapeHtml(first._source_power_label||def.power)}</span><span></span></div><div class="hp-rows">${rows}</div>${isAdmin?`<button class="btn-back hp-add" onclick="addHeroPowerRow('${kind}')">+ Tambah baris ${escapeHtml(first._source_name_label||def.name)}</button>`:''}</section>`;
+ };
+ host.classList.toggle('hp-readonly',!isAdmin);
+ host.innerHTML=`<datalist id="hp-alliance-list">${alliances.map(a=>`<option value="${escapeHtml(a)}"></option>`).join('')}</datalist><div class="hp-legend"><span><i class="hp-dot hp-dot-top15"></i>Top 15</span><span><i class="hp-dot hp-dot-top20"></i>Top 16–20</span><span><i class="hp-dot hp-dot-rest"></i>Di luar Top 20</span></div><div class="hp-group-grid">${groupHtml('hero')}${groupHtml('total')}</div>`;
+ renderHeroPowerGroupHeads();
  renderHeroPowerSummary();
 }
 function heroPowerKind(row){
